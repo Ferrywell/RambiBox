@@ -7,10 +7,10 @@ namespace RambiBox.App;
 public static class AppInfo
 {
     /// <summary>Source code repository.</summary>
-    public const string RepoUrl = "https://github.com/OWNER/RambiBox";
+    public const string RepoUrl = "https://github.com/Ferrywell/RambiBox";
 
     /// <summary>Project website (GitHub Pages).</summary>
-    public const string SiteUrl = "https://OWNER.github.io/RambiBox/";
+    public const string SiteUrl = "https://ferrywell.github.io/RambiBox/";
 
     /// <summary>New issue (bug report / feature request chooser).</summary>
     public const string IssuesUrl = RepoUrl + "/issues/new/choose";

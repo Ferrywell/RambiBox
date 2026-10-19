@@ -5,8 +5,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to report a problem! Please check the [FAQ](https://OWNER.github.io/RambiBox/#faq) first.
-        **Security issues:** please don't file them here — see [SECURITY.md](https://github.com/OWNER/RambiBox/blob/main/SECURITY.md).
+        Thanks for taking the time to report a problem! Please check the [FAQ](https://ferrywell.github.io/RambiBox/#faq) first.
+        **Security issues:** please don't file them here — see [SECURITY.md](https://github.com/Ferrywell/RambiBox/blob/main/SECURITY.md).
   - type: textarea
     id: what-happened
     attributes:

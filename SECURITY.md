@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please **do not open a public issue** for security problems. Report them privately through GitHub:
-**[Report a vulnerability](https://github.com/OWNER/RambiBox/security/advisories/new)** (Security tab → *Report a vulnerability*).
+**[Report a vulnerability](https://github.com/Ferrywell/RambiBox/security/advisories/new)** (Security tab → *Report a vulnerability*).
 
 Include what you found, how to reproduce it, the RambiBox version (Settings → About) and what an attacker could achieve.
 You will get an answer within a few days. Once a fix is released, the advisory is published and you are credited

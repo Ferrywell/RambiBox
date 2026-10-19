@@ -36,7 +36,7 @@ This Code of Conduct applies within all community spaces, and also applies when 
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement through a [private report](https://github.com/OWNER/RambiBox/security/advisories/new) on this repository or a direct message to the maintainer, [@OWNER](https://github.com/OWNER). All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement through a [private report](https://github.com/Ferrywell/RambiBox/security/advisories/new) on this repository or a direct message to the maintainer, [@Ferrywell](https://github.com/Ferrywell). All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the reporter of any incident.
 

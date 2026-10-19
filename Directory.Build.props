@@ -15,8 +15,8 @@
     <Authors>Ferry</Authors>
     <Copyright>Copyright © 2026 Ferry — GPL-3.0-or-later</Copyright>
     <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
-    <PackageProjectUrl>https://OWNER.github.io/RambiBox/</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/OWNER/RambiBox</RepositoryUrl>
+    <PackageProjectUrl>https://ferrywell.github.io/RambiBox/</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Ferrywell/RambiBox</RepositoryUrl>
     <InvariantGlobalization>true</InvariantGlobalization>
     <TieredPGO>true</TieredPGO>
   </PropertyGroup>

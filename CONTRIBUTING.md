@@ -5,10 +5,10 @@ welcome. Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Reporting bugs and ideas
 
-- **Bugs:** [open a bug report](https://github.com/OWNER/RambiBox/issues/new?template=bug_report.yml). Include your
+- **Bugs:** [open a bug report](https://github.com/Ferrywell/RambiBox/issues/new?template=bug_report.yml). Include your
   board and sketch, the number of LEDs, Windows version, HDR on/off, and the relevant part of the log
   (`%LocalAppData%\RambiBox\logs\rambibox.log`).
-- **Ideas:** [open a feature request](https://github.com/OWNER/RambiBox/issues/new?template=feature_request.yml).
+- **Ideas:** [open a feature request](https://github.com/Ferrywell/RambiBox/issues/new?template=feature_request.yml).
   For bigger changes, please open an issue first so we can agree on the approach before you write a lot of code.
 - **Security issues:** report them privately. See [SECURITY.md](SECURITY.md).
 
@@ -23,7 +23,7 @@ You need:
 Then build and run:
 
 ```bat
-git clone https://github.com/OWNER/RambiBox
+git clone https://github.com/Ferrywell/RambiBox
 cd RambiBox
 dotnet build RambiBox.slnx
 dotnet run --project src/RambiBox.App -- --simulate

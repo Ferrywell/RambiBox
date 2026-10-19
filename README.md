@@ -1,18 +1,18 @@
 <p align="center">
-  <a href="https://OWNER.github.io/RambiBox/"><img src="docs/assets/hero.png" alt="RambiBox: ambilight for Windows, done right. The app window with a live preview, surrounded by colorful ambient light." width="100%"></a>
+  <a href="https://ferrywell.github.io/RambiBox/"><img src="docs/assets/hero.png" alt="RambiBox: ambilight for Windows, done right. The app window with a live preview, surrounded by colorful ambient light." width="100%"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/OWNER/RambiBox/actions/workflows/ci.yml"><img src="https://github.com/OWNER/RambiBox/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
-  <a href="https://github.com/OWNER/RambiBox/releases/latest"><img src="https://img.shields.io/github/v/release/OWNER/RambiBox?label=release&color=6a46ff" alt="Latest release"></a>
+  <a href="https://github.com/Ferrywell/RambiBox/actions/workflows/ci.yml"><img src="https://github.com/Ferrywell/RambiBox/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+  <a href="https://github.com/Ferrywell/RambiBox/releases/latest"><img src="https://img.shields.io/github/v/release/Ferrywell/RambiBox?label=release&color=6a46ff" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License: GPL-3.0-or-later"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20x64-0078D4" alt="Platform: Windows 10 and 11, x64">
   <img src="https://img.shields.io/badge/.NET-10-512BD4" alt=".NET 10">
 </p>
 
 <p align="center">
-  <a href="https://github.com/OWNER/RambiBox/releases/latest"><b>Download</b></a> ·
-  <a href="https://OWNER.github.io/RambiBox/"><b>Website</b></a> ·
+  <a href="https://github.com/Ferrywell/RambiBox/releases/latest"><b>Download</b></a> ·
+  <a href="https://ferrywell.github.io/RambiBox/"><b>Website</b></a> ·
   <a href="#phone-color-calibration">Calibration guide</a> ·
   <a href="#faq--troubleshooting">FAQ</a>
 </p>
@@ -39,7 +39,7 @@ One self-contained `.exe`, no installer, no .NET runtime, no admin rights.
 | **Calibration** | **Light mode** |
 | <img src="docs/assets/app-calibration-dark.png" alt="Color calibration page with the three steps and the white balance result" width="440"> | <img src="docs/assets/app-home-light.png" alt="Home page in light mode" width="440"> |
 
-Phone calibration screenshots are on the [website](https://OWNER.github.io/RambiBox/#screenshots). All screenshots
+Phone calibration screenshots are on the [website](https://ferrywell.github.io/RambiBox/#screenshots). All screenshots
 were made with the built-in `--demo` mode, which shows a synthetic scene instead of the real desktop.
 
 ## Features
@@ -79,7 +79,7 @@ were made with the built-in `--demo` mode, which shows a synthetic scene instead
 
 ### Option 1: download the exe (recommended)
 
-1. Download **`RambiBox.exe`** from the [latest release](https://github.com/OWNER/RambiBox/releases/latest).
+1. Download **`RambiBox.exe`** from the [latest release](https://github.com/Ferrywell/RambiBox/releases/latest).
    Optionally check it against the attached `RambiBox.exe.sha256`.
 2. Put it in a folder of your choice, e.g. `%LocalAppData%\Programs\RambiBox`, and start it.
 3. **SmartScreen:** the exe is not code-signed, so Windows may show *"Windows protected your PC"*. Click
@@ -90,7 +90,7 @@ were made with the built-in `--demo` mode, which shows a synthetic scene instead
 With the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) installed:
 
 ```bat
-git clone https://github.com/OWNER/RambiBox
+git clone https://github.com/Ferrywell/RambiBox
 cd RambiBox
 install.cmd
 ```

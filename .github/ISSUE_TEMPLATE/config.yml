@@ -1,8 +1,8 @@
 blank_issues_enabled: true
 contact_links:
   - name: Report a security vulnerability
-    url: https://github.com/OWNER/RambiBox/security/advisories/new
+    url: https://github.com/Ferrywell/RambiBox/security/advisories/new
     about: Please report security issues privately, not as a public issue.
   - name: FAQ and troubleshooting
-    url: https://OWNER.github.io/RambiBox/#faq
+    url: https://ferrywell.github.io/RambiBox/#faq
     about: Common questions (COM port busy, firewall, certificates, HDR).
