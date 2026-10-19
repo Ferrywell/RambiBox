@@ -5,7 +5,7 @@
              IsTabStop="False">
     <StackPanel>
         <TextBlock Text="Color calibration" Style="{StaticResource PageTitle}" />
-        <TextBlock Text="Use your phone's camera to make the white of the LEDs match the white of your screen – no special tools needed."
+        <TextBlock Text="Use your phone to make the LED glow match your screen – white, dark tones and colors. No special tools needed."
                    Style="{StaticResource PageSubtitle}" />
 
         <Border Style="{StaticResource Card}" Padding="20,18">
@@ -17,11 +17,11 @@
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource StepBubble}"><TextBlock Text="1" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
                     <StackPanel Grid.Column="1" Margin="14,3,0,0">
-                        <TextBlock Text="Start the calibration" Style="{StaticResource SettingTitle}" FontWeight="SemiBold" />
+                        <TextBlock Text="Camera color loop" Style="{StaticResource SettingTitle}" FontWeight="SemiBold" />
                         <TextBlock Style="{StaticResource SettingDescription}">
-                            <Run Text="A QR code and a test pattern fill the screen that RambiBox captures:" />
-                            <Run Text="{Binding MonitorText, Mode=OneWay, StringFormat={}{0}.}" />
-                            <Run Text="Dim the room lights if you can." />
+                            <Run Text="Scan the QR code on" />
+                            <Run Text="{Binding MonitorText, Mode=OneWay, StringFormat={}{0}}" />
+                            <Run Text="and point the phone at the screen. RambiBox cycles white, dark grays and red/green/blue on the screen and the LEDs together and corrects the white balance and the dark tones live (the wall's own color is included). Live camera after a one-time phone setup, or a short video without any setup." />
                         </TextBlock>
                     </StackPanel>
                 </Grid>
@@ -32,8 +32,8 @@
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource StepBubble}"><TextBlock Text="2" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
                     <StackPanel Grid.Column="1" Margin="14,3,0,0">
-                        <TextBlock Text="Open the page on your phone" Style="{StaticResource SettingTitle}" FontWeight="SemiBold" />
-                        <TextBlock Text="Scan the QR code with your phone's camera and open the link. The phone must be on the same Wi-Fi network as this PC."
+                        <TextBlock Text="Fine-tune by eye" Style="{StaticResource SettingTitle}" FontWeight="SemiBold" />
+                        <TextBlock Text="Cameras don't see colors exactly like your eyes – especially white. Your phone becomes a remote: nudge the white and the dark tones until the glow matches the screen edge to your eyes."
                                    Style="{StaticResource SettingDescription}" />
                     </StackPanel>
                 </Grid>
@@ -44,8 +44,8 @@
                     </Grid.ColumnDefinitions>
                     <Border Style="{StaticResource StepBubble}"><TextBlock Text="3" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
                     <StackPanel Grid.Column="1" Margin="14,3,0,0">
-                        <TextBlock Text="Take photos" Style="{StaticResource SettingTitle}" FontWeight="SemiBold" />
-                        <TextBlock Text="Stand back so the whole screen and the LED glow around it are in the picture, and take a photo on the page. RambiBox adjusts the white balance after every photo – repeat until it says calibrated, then tap Done."
+                        <TextBlock Text="Colors A/B" Style="{StaticResource SettingTitle}" FontWeight="SemiBold" />
+                        <TextBlock Text="Compare saturated colors with (A) and without (B) the measured color correction. It is only kept if A looks closer to you."
                                    Style="{StaticResource SettingDescription}" />
                     </StackPanel>
                 </Grid>
@@ -60,6 +60,8 @@
                                Style="{StaticResource SettingDescription}"
                                Visibility="{Binding CalibrationActive, Converter={StaticResource BoolToVisibility}}" />
                 </WrapPanel>
+                <TextBlock Text="Tip: dim the room lights. Phone and PC must be on the same Wi-Fi."
+                           Style="{StaticResource SettingDescription}" Margin="0,8,0,0" />
             </StackPanel>
         </Border>
 
@@ -89,7 +91,7 @@
                     <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding S.WhiteB, StringFormat={}{0:0}%}" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
                 </Grid>
                 <Border Style="{StaticResource Divider}" Margin="-16,12" />
-                <Grid ToolTip="Per-color correction for dim tones, measured by the optional dark-tone step of the phone calibration.">
+                <Grid ToolTip="Per-color correction for dim tones (channel gamma), measured by the gray steps of the color loop and fine-tuned by eye.">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
@@ -102,17 +104,41 @@
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                 </Grid>
                 <Border Style="{StaticResource Divider}" Margin="-16,12" />
+                <Grid ToolTip="LED color matrix: re-aims saturated colors so the LED red, green and blue look like the screen's. White and grays are not affected.">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Color correction" Style="{StaticResource SettingTitle}" />
+                        <TextBlock Text="Makes the LED primaries match the screen's; kept only when it won the A/B check." Style="{StaticResource SettingDescription}" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" Text="{Binding ColorMatrixText}" VerticalAlignment="Center" Margin="16,0,0,0"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </Grid>
+                <Border Style="{StaticResource Divider}" Margin="-16,12" />
                 <WrapPanel>
-                    <Button Content="Restore previous white balance" Command="{Binding RestorePreviousWhiteBalanceCommand}" Margin="0,0,12,4"
-                            ToolTip="Undoes the last calibration (white balance and dark-tone correction)." />
+                    <Button Content="Restore previous" Command="{Binding RestorePreviousWhiteBalanceCommand}" Margin="0,0,12,4"
+                            ToolTip="Undoes the last calibration: white balance, dark-tone correction and color correction." />
                     <Button Content="Adjust manually" Command="{Binding NavigateCommand}" CommandParameter="colors" Margin="0,0,12,4" />
                 </WrapPanel>
-                <TextBlock Text="{Binding PreviousWhiteBalanceText}" Style="{StaticResource SettingDescription}" Margin="0,4,0,0" />
+                <TextBlock Text="{Binding PreviousWhiteBalanceText}" Style="{StaticResource SettingDescription}" Margin="0,4,0,0" TextWrapping="Wrap" />
             </StackPanel>
         </Border>
 
-        <TextBlock Text="Network" Style="{StaticResource SectionHeader}" />
-        <c:SettingCard Header="Allow phone access in Windows Firewall" Glyph="&#xE83D;"
+        <TextBlock Text="Phone &amp; network" Style="{StaticResource SectionHeader}" />
+        <c:SettingCard Header="Live camera on the phone" Glyph="&#xE722;"
+                       Description="The live camera needs a secure page. RambiBox uses its own certificate that only works for your home network; the phone trusts it after a one-time setup it walks you through. Without it the phone records a short video instead.">
+            <StackPanel HorizontalAlignment="Right">
+                <Button Content="Reset phone certificate" Command="{Binding ResetPhoneCertCommand}" HorizontalAlignment="Right"
+                        ToolTip="Deletes RambiBox's local certificate and creates a new one. The phone must do the one-time setup again." />
+            </StackPanel>
+        </c:SettingCard>
+        <TextBlock Text="{Binding PhoneCertStatusText}" Style="{StaticResource SettingDescription}" Margin="4,4,0,0" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding PhoneCertMessage}" Style="{StaticResource SettingDescription}" Margin="4,2,0,0" TextWrapping="Wrap"
+                   Visibility="{Binding PhoneCertMessage, Converter={StaticResource NullToCollapsed}}" />
+
+        <c:SettingCard Header="Allow phone access in Windows Firewall" Glyph="&#xE83D;" Margin="0,8,0,0"
                        Description="Optional. Your phone talks to RambiBox over your Wi-Fi. Without this, Windows shows a one-time prompt when the calibration starts – choose Private networks there.">
             <StackPanel HorizontalAlignment="Right">
                 <Button Content="Allow…" Command="{Binding AllowFirewallCommand}" HorizontalAlignment="Right"

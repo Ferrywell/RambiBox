@@ -28,6 +28,13 @@ internal sealed class SyntheticPhoto
     public double LedLevel { get; init; } = CalibrationMath.WhiteLevel;
     public bool DarkStage { get; init; }
 
+    /// <summary>v2: the pattern on screen (null = v1 white/dark band pattern). Rect colors are sRGB.</summary>
+    public CalibrationPattern? Pattern { get; init; }
+    /// <summary>v2: LED glow color in camera space (linear, before camera WB/exposure); overrides the Wb/Gamma/Tint model.</summary>
+    public Rgb3? GlowCamera { get; init; }
+    /// <summary>v2: camera response to the screen's linear RGB (row-major 3×3, null = identity).</summary>
+    public double[]? ScreenMix { get; init; }
+
     public Rgb3 CameraWb { get; init; } = new(0.8, 1.0, 1.3);
     public double Exposure { get; init; } = 1.0;
     /// <summary>Extra camera tone curve exponent applied to linear values (1 = ideal sRGB camera).</summary>
@@ -87,21 +94,37 @@ internal sealed class SyntheticPhoto
         var layout = new CalibrationLayout(Aspect);
         // Screen texture (linear light)
         int tw = 960, th = (int)Math.Round(tw / Aspect);
-        var tex = new float[tw * th];
+        var tex = new float[tw * th * 3];
         Array.Fill(tex, 0.0015f); // screen black
-        foreach (var r in layout.BuildPattern(false, DarkStage).Rects)
+        var mix = ScreenMix;
+        foreach (var r in (Pattern ?? layout.BuildPattern(false, DarkStage)).Rects)
         {
-            float lin = (float)CalibrationAnalyzer.ToLinear((byte)(r.Rgb & 0xFF));
-            if ((r.Rgb & 0xFF) == 0) lin = 0.0015f;
+            double lr = Lin(r.Rgb >> 16), lg = Lin(r.Rgb >> 8), lb = Lin(r.Rgb);
+            float cr = (float)lr, cg = (float)lg, cb = (float)lb;
+            if (mix is not null)
+            {
+                cr = (float)(mix[0] * lr + mix[1] * lg + mix[2] * lb);
+                cg = (float)(mix[3] * lr + mix[4] * lg + mix[5] * lb);
+                cb = (float)(mix[6] * lr + mix[7] * lg + mix[8] * lb);
+            }
             int x0 = (int)Math.Round(r.Left * tw), x1 = (int)Math.Round(r.Right * tw);
             int y0 = (int)Math.Round(r.Top * th), y1 = (int)Math.Round(r.Bottom * th);
             for (int y = y0; y < y1; y++)
-                for (int x = x0; x < x1; x++) tex[y * tw + x] = lin;
+                for (int x = x0; x < x1; x++)
+                {
+                    int o = (y * tw + x) * 3;
+                    tex[o] = cr; tex[o + 1] = cg; tex[o + 2] = cb;
+                }
+        }
+        static double Lin(int c)
+        {
+            c &= 0xFF;
+            return c == 0 ? 0.0015 : CalibrationAnalyzer.ToLinear((byte)c);
         }
 
         var H = Homography.Fit([new(0, 0), new(1, 0), new(1, 1), new(0, 1)], Corners)!;
         var inv = H.Inverse();
-        var glow = GlowColor(Wb, Gamma, StripExponent, Tint, LedLevel);
+        var glow = GlowCamera ?? GlowColor(Wb, Gamma, StripExponent, Tint, LedLevel);
         double bezel = 0.012, glowFalloff = 0.12;
 
         var img = new RgbImage(Width, Height);
@@ -129,8 +152,8 @@ internal sealed class SyntheticPhoto
         {
             if (ShowScreen && u >= 0 && u < 1 && v >= 0 && v < 1)
             {
-                double s = tex[Math.Min(th - 1, (int)(v * th)) * tw + Math.Min(tw - 1, (int)(u * tw))];
-                r += s; g += s; b += s;
+                int o = (Math.Min(th - 1, (int)(v * th)) * tw + Math.Min(tw - 1, (int)(u * tw))) * 3;
+                r += tex[o]; g += tex[o + 1]; b += tex[o + 2];
                 return;
             }
             if (ShowScreen && u >= -bx && u <= 1 + bx && v >= -bezel && v <= 1 + bezel)

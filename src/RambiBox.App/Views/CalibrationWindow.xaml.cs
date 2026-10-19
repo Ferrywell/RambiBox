@@ -1,10 +1,8 @@
 using System.ComponentModel;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
 using System.Windows.Threading;
 using QRCoder;
 using RambiBox.App.Services;
@@ -15,7 +13,8 @@ using RambiBox.Core.Capture;
 namespace RambiBox.App.Views;
 
 /// <summary>
-/// Full-screen, top-most window on the captured monitor that shows the phone-calibration pattern and QR code.
+/// Full-screen, top-most window on the captured monitor that shows the phone-calibration patterns (they change about
+/// once a second during the color loop) and, until the phone connects, the QR code.
 /// </summary>
 public partial class CalibrationWindow : Window
 {
@@ -23,7 +22,6 @@ public partial class CalibrationWindow : Window
     private readonly PhoneCalibrationService? _service;
     private readonly MonitorInfo? _monitor;
     private readonly CalibrationSnapshot _before;
-    private CalibrationPattern? _drawnPattern;
     private Uri? _qrUrl;
     private int _updateQueued;
     private bool _stopped, _started;
@@ -46,7 +44,7 @@ public partial class CalibrationWindow : Window
         SourceInitialized += (_, _) => PlaceOnMonitor();
         DpiChanged += (_, _) => PlaceOnMonitor();
         Loaded += (_, _) => StartService();
-        SizeChanged += (_, _) => { _drawnPattern = null; Render(); };
+        SizeChanged += (_, _) => Render();
         Closing += OnClosing;
         Closed += OnClosed;
     }
@@ -109,7 +107,7 @@ public partial class CalibrationWindow : Window
         CalibrationState? state = null;
         CalibrationPattern? pattern = null;
         Uri? url = null;
-        bool finished = false;
+        bool finished = false, cancel = false;
         if (_service is not null && _startError is null)
         {
             try
@@ -118,6 +116,7 @@ public partial class CalibrationWindow : Window
                 pattern = _service.Pattern;
                 url = _service.Url;
                 finished = _service.IsFinished;
+                cancel = _service.IsCancelRequested;
             }
             catch (Exception ex)
             {
@@ -126,44 +125,35 @@ public partial class CalibrationWindow : Window
             }
         }
 
+        if (cancel)
+        {
+            Finish(keepResult: false);
+            return;
+        }
         if (finished)
         {
             Finish(keepResult: true);
             return;
         }
 
-        // ---- pattern
-        if (pattern is not null && !ReferenceEquals(pattern, _drawnPattern))
-        {
-            _drawnPattern = pattern;
-            PatternCanvas.Children.Clear();
-            foreach (var r in pattern.Rects)
-            {
-                var rect = new Rectangle
-                {
-                    Width = Math.Max(0, (r.Right - r.Left) * w),
-                    Height = Math.Max(0, (r.Bottom - r.Top) * h),
-                    Fill = new SolidColorBrush(Color.FromRgb((byte)(r.Rgb >> 16), (byte)(r.Rgb >> 8), (byte)r.Rgb)),
-                    SnapsToDevicePixels = true,
-                };
-                Canvas.SetLeft(rect, r.Left * w);
-                Canvas.SetTop(rect, r.Top * h);
-                PatternCanvas.Children.Add(rect);
-            }
-        }
+        // ---- pattern (the surface only redraws when the pattern object changes)
+        if (pattern is not null) Surface.Pattern = pattern;
+        bool eye = pattern?.EyeMode == true;
 
         // ---- QR
         bool showQr = pattern is { ShowQr: true } && url is not null && state?.Phase != CalibrationPhase.Failed;
         QrPanel.Visibility = showQr ? Visibility.Visible : Visibility.Collapsed;
         if (showQr) LayoutQr(pattern!, url!, w, h);
 
-        // ---- status (between the top band and the centre) and buttons (above the bottom band)
-        StatusPanel.Margin = new Thickness(24, h * 0.095, 24, 0);
-        StatusPanel.MaxWidth = Math.Max(300, w * 0.7);
-        ButtonPanel.Margin = new Thickness(0, 0, 0, h * 0.11);
-        StatusText.FontSize = Math.Clamp(h * 0.022, 16, 30);
-        DetailText.FontSize = Math.Clamp(h * 0.013, 13, 20);
-        HintText.FontSize = Math.Clamp(h * 0.012, 12, 18);
+        // ---- status: camera patterns keep it between the top band (≤ 0.075 h) / the detector's check line (0.125 h)
+        // and the black probe (≥ 0.28 h); eye patterns have a black centre. Buttons sit above the bottom band.
+        StatusPanel.VerticalAlignment = eye ? VerticalAlignment.Center : VerticalAlignment.Top;
+        StatusPanel.Margin = eye ? new Thickness(w * 0.12, 0, w * 0.12, h * 0.08) : new Thickness(24, h * 0.135, 24, 0);
+        StatusPanel.MaxWidth = Math.Max(300, w * (eye ? 0.6 : 0.62));
+        ButtonPanel.Margin = new Thickness(0, 0, 0, h * (eye ? 0.17 : 0.13));
+        StatusText.FontSize = Math.Clamp(h * (eye ? 0.026 : 0.019), 15, 30);
+        DetailText.FontSize = Math.Clamp(h * 0.012, 12, 18);
+        HintText.FontSize = Math.Clamp(h * 0.011, 11, 16);
         CancelButton.FontSize = DoneButton.FontSize = Math.Clamp(h * 0.012, 14, 20);
         CancelButton.MinWidth = DoneButton.MinWidth = CancelButton.FontSize * 9;
 
@@ -172,6 +162,7 @@ public partial class CalibrationWindow : Window
             StatusText.Text = _startError;
             DetailText.Text = "";
             HintText.Visibility = Visibility.Collapsed;
+            ProgressTrack.Visibility = Visibility.Collapsed;
             DoneButton.Visibility = Visibility.Collapsed;
             CancelButton.Content = "Close";
             return;
@@ -183,16 +174,19 @@ public partial class CalibrationWindow : Window
         }
 
         StatusText.Text = state.Message;
-        var parts = new List<string>();
-        if (state.PhotosAnalyzed > 0) parts.Add(state.PhotosAnalyzed == 1 ? "1 photo" : $"{state.PhotosAnalyzed} photos");
-        if (state.ErrorPercent is { } err) parts.Add($"color difference {err:0.0}%");
-        parts.Add($"white balance R {state.WhiteR:P0} · G {state.WhiteG:P0} · B {state.WhiteB:P0}");
-        if (_service!.IsDarkStage) parts.Add("dark-tone step");
-        DetailText.Text = string.Join("   ·   ", parts);
+        DetailText.Text = state.Detail;
+        DetailText.Visibility = string.IsNullOrEmpty(state.Detail) ? Visibility.Collapsed : Visibility.Visible;
+        if (state.Progress is { } p && state.Phase == CalibrationPhase.LiveCamera)
+        {
+            ProgressTrack.Visibility = Visibility.Visible;
+            ProgressTrack.Width = Math.Min(StatusPanel.MaxWidth, w * 0.4);
+            ProgressFill.Width = ProgressTrack.Width * Math.Clamp(p, 0, 1);
+        }
+        else ProgressTrack.Visibility = Visibility.Collapsed;
         HintText.Visibility = state.Phase is CalibrationPhase.WaitingForPhone or CalibrationPhase.Failed
             ? Visibility.Visible : Visibility.Collapsed;
         bool failed = state.Phase == CalibrationPhase.Failed;
-        StatusText.Foreground = failed ? new SolidColorBrush(Color.FromRgb(0xFF, 0x99, 0xA4)) : new SolidColorBrush(Color.FromRgb(0xD8, 0xD8, 0xD8));
+        StatusText.Foreground = failed ? new SolidColorBrush(Color.FromRgb(0xFF, 0x99, 0xA4)) : new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8));
         DoneButton.Visibility = failed ? Visibility.Collapsed : Visibility.Visible;
         CancelButton.Content = failed ? "Close" : "Cancel";
     }
@@ -222,8 +216,8 @@ public partial class CalibrationWindow : Window
         }
         QrImage.Width = QrImage.Height = side;
         QrPanel.Width = aw;
-        Canvas.SetLeft(QrPanel, left);
-        Canvas.SetTop(QrPanel, top + Math.Max(0, (ah - (side + textH)) / 2));
+        System.Windows.Controls.Canvas.SetLeft(QrPanel, left);
+        System.Windows.Controls.Canvas.SetTop(QrPanel, top + Math.Max(0, (ah - (side + textH)) / 2));
     }
 
     /// <summary>One pixel per module (incl. the 4-module quiet zone), black on white.</summary>
@@ -268,16 +262,14 @@ public partial class CalibrationWindow : Window
         if (!keepResult)
         {
             // make sure the old values are back even if the service could not restore them
-            var (wb, g) = (_before.WhiteBalance, _before.ChannelGamma);
-            _host.ApplyWhiteBalance(wb.R, wb.G, wb.B);
-            _host.ApplyChannelGamma(g.R, g.G, g.B);
+            _host.ApplyCalibration(_before);
         }
         else if (_started)
         {
-            // remember the old values for "Restore previous white balance" (applied values are read on the UI thread)
+            // remember the old values for "Restore previous" (applied values are read on the UI thread)
             Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
             {
-                if (_host.CurrentCalibration != _before) _host.PreviousCalibration = _before;
+                if (!_host.CurrentCalibration.SameValues(_before)) _host.PreviousCalibration = _before;
                 _host.FlushSave();
             });
         }
@@ -293,5 +285,60 @@ public partial class CalibrationWindow : Window
     private void OnClosed(object? sender, EventArgs e)
     {
         try { _service?.Dispose(); } catch { /* already stopped */ }
+    }
+}
+
+/// <summary>
+/// Draws a <see cref="CalibrationPattern"/> (black background + filled rectangles) in one element, with every edge
+/// snapped to whole device pixels and no anti-aliasing, so the step code and the bands stay crisp for the camera.
+/// </summary>
+public sealed class PatternSurface : FrameworkElement
+{
+    private CalibrationPattern? _pattern;
+    private readonly Dictionary<int, SolidColorBrush> _brushes = new();
+
+    public PatternSurface()
+    {
+        RenderOptions.SetEdgeMode(this, EdgeMode.Aliased);
+        SnapsToDevicePixels = true;
+    }
+
+    public CalibrationPattern? Pattern
+    {
+        get => _pattern;
+        set
+        {
+            if (ReferenceEquals(value, _pattern)) return;
+            _pattern = value;
+            InvalidateVisual();
+        }
+    }
+
+    protected override void OnRender(DrawingContext dc)
+    {
+        double w = ActualWidth, h = ActualHeight;
+        dc.DrawRectangle(Brushes.Black, null, new Rect(0, 0, w, h));
+        if (_pattern is null || w <= 0 || h <= 0) return;
+        var dpi = VisualTreeHelper.GetDpi(this);
+        double sx = dpi.DpiScaleX, sy = dpi.DpiScaleY;
+        double pw = Math.Round(w * sx), ph = Math.Round(h * sy);
+        foreach (var r in _pattern.Rects)
+        {
+            // normalized → device pixels (rounded) → DIPs
+            double x0 = Math.Round(r.Left * pw) / sx, x1 = Math.Round(r.Right * pw) / sx;
+            double y0 = Math.Round(r.Top * ph) / sy, y1 = Math.Round(r.Bottom * ph) / sy;
+            if (x1 <= x0 || y1 <= y0) continue;
+            dc.DrawRectangle(Brush(r.Rgb), null, new Rect(x0, y0, x1 - x0, y1 - y0));
+        }
+    }
+
+    private SolidColorBrush Brush(int rgb)
+    {
+        if (_brushes.TryGetValue(rgb, out var b)) return b;
+        b = new SolidColorBrush(Color.FromRgb((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb));
+        b.Freeze();
+        if (_brushes.Count > 64) _brushes.Clear();
+        _brushes[rgb] = b;
+        return b;
     }
 }

@@ -189,9 +189,7 @@ public partial class App : Application
         PhoneCalibrationService? service = null;
         try
         {
-            service = new PhoneCalibrationService(Host.Engine,
-                () => Host.CurrentWhiteBalance, Host.ApplyWhiteBalance,
-                Host.ApplyChannelGamma, () => Host.CurrentChannelGamma);
+            service = new PhoneCalibrationService(Host.Engine, Host.CalibrationTarget, Host.PhoneCa);
         }
         catch (Exception ex)
         {

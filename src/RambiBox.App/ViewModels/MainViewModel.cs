@@ -84,6 +84,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         });
         RestorePreviousWhiteBalanceCommand = new RelayCommand(RestorePreviousWhiteBalance, () => _host.PreviousCalibration is not null);
         AllowFirewallCommand = new RelayCommand(async () => await AllowFirewallAsync(), () => !_firewallBusy);
+        ResetPhoneCertCommand = new RelayCommand(async () => await ResetPhoneCertAsync(), () => !_host.CalibrationActive);
 
         RefreshPortsAsync();
         RefreshMonitors();
@@ -262,6 +263,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private void OnSettingsChanged(object? sender)
     {
         OnPropertyChanged(nameof(ChannelGammaText));
+        OnPropertyChanged(nameof(ColorMatrixText));
         if (_viewActive) RefreshStatus();
     }
 
@@ -367,6 +369,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IdentifyLeds));
         OnPropertyChanged(nameof(TestColors));
         OnPropertyChanged(nameof(CalibrationActive));
+        if (!_host.CalibrationActive)
+        {
+            _ = RefreshPhoneCertAsync(); // the phone may have been set up during the calibration
+            OnPropertyChanged(nameof(PreviousWhiteBalanceText));
+        }
         CommandManager.InvalidateRequerySuggested();
         RefreshStatus();
     }
@@ -450,7 +457,58 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public string PreviousWhiteBalanceText => _host.PreviousCalibration is { } p
         ? $"Before the last calibration: red {p.WhiteBalance.R:P0} · green {p.WhiteBalance.G:P0} · blue {p.WhiteBalance.B:P0}"
+          + $", dark tones {(IsNeutral(p.ChannelGamma) ? "off" : "on")}, color correction {(p.ColorMatrix is null ? "off" : "on")}"
         : "Available after you have calibrated in this session.";
+
+    private static bool IsNeutral((double R, double G, double B) g) =>
+        Math.Abs(g.R - 1) < 0.005 && Math.Abs(g.G - 1) < 0.005 && Math.Abs(g.B - 1) < 0.005;
+
+    public string ColorMatrixText
+    {
+        get
+        {
+            var m = _host.Settings.Color.ColorMatrix;
+            if (m is null) return "Off";
+            double dev = 0;
+            for (int i = 0; i < 9; i++) dev = Math.Max(dev, Math.Abs(m[i] - (i % 4 == 0 ? 1 : 0)));
+            return $"On (up to {dev:P0} mixing)";
+        }
+    }
+
+    // ------------------------------------------------------------------ phone certificate (live camera)
+
+    private string _phoneCertStatus = "Checking…";
+    public string PhoneCertStatusText { get => _phoneCertStatus; private set => SetField(ref _phoneCertStatus, value); }
+    private string? _phoneCertMessage;
+    public string? PhoneCertMessage { get => _phoneCertMessage; private set => SetField(ref _phoneCertMessage, value); }
+    public ICommand ResetPhoneCertCommand { get; }
+
+    private async Task RefreshPhoneCertAsync()
+    {
+        var ca = _host.PhoneCa;
+        var (exists, trusted) = await Task.Run(() => (ca.Exists, ca.PhoneTrustedAt));
+        PhoneCertStatusText = trusted is { } t
+            ? $"Live camera: ready ✓ (phone set up {t.ToLocalTime():d})"
+            : exists ? "Live camera: one-time phone setup needed (the phone guides you)"
+                     : "Live camera: one-time phone setup needed (the phone guides you; the certificate is created at the first start)";
+    }
+
+    private async Task ResetPhoneCertAsync()
+    {
+        if (_host.CalibrationActive)
+        {
+            PhoneCertMessage = "Close the running calibration first.";
+            return;
+        }
+        var answer = MessageBox.Show(
+            "This deletes RambiBox's local certificate and creates a new one. Your phone then needs the one-time setup again " +
+            "(you can remove the old profile in the phone's Settings → General → VPN & Device Management).\n\nReset the phone certificate?",
+            "RambiBox", MessageBoxButton.OKCancel, MessageBoxImage.Question);
+        if (answer != MessageBoxResult.OK) return;
+        await Task.Run(() => _host.PhoneCa.Reset());
+        PhoneCertMessage = "Certificate reset. The phone will be guided through the setup at the next calibration.";
+        await RefreshPhoneCertAsync();
+    }
 
     public string ChannelGammaText
     {
@@ -466,8 +524,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         if (_host.PreviousCalibration is not { } p) return;
         _host.PreviousCalibration = null;
-        _host.ApplyWhiteBalance(p.WhiteBalance.R, p.WhiteBalance.G, p.WhiteBalance.B);
-        _host.ApplyChannelGamma(p.ChannelGamma.R, p.ChannelGamma.G, p.ChannelGamma.B);
+        _host.ApplyCalibration(p); // white balance, dark tones and color correction
         OnPropertyChanged(nameof(PreviousWhiteBalanceText));
     }
 
@@ -475,7 +532,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         OnPropertyChanged(nameof(PreviousWhiteBalanceText));
         OnPropertyChanged(nameof(ChannelGammaText));
+        OnPropertyChanged(nameof(ColorMatrixText));
         _ = RefreshFirewallAsync();
+        _ = RefreshPhoneCertAsync();
     }
 
     // ------------------------------------------------------------------ firewall (phone calibration)

@@ -8,17 +8,27 @@ internal readonly record struct RectD(double L, double T, double R, double B)
     public bool Contains(double u, double v) => u >= L && u <= R && v >= T && v <= B;
     public PointD[] Corners() => [new(L, T), new(R, T), new(R, B), new(L, B)];
     public PointD Center => new((L + R) / 2, (T + B) / 2);
+
+    /// <summary>The central part of the rectangle (<paramref name="f"/> = kept fraction of width and height).</summary>
+    public RectD Inset(double f)
+    {
+        double dx = (R - L) * (1 - f) / 2, dy = (B - T) * (1 - f) / 2;
+        return new(L + dx, T + dy, R - dx, B - dy);
+    }
 }
 
 /// <summary>
-/// Geometry of the on-screen calibration pattern (shared by the pattern renderer, the analyzer and the tests).
+/// Geometry of the on-screen calibration patterns (shared by the pattern renderer, the analyzer and the tests).
 /// Sizes that must look square on the monitor are specified in units of the screen HEIGHT and converted
 /// to normalized x with the monitor aspect ratio.
 /// <para>
-/// Pattern: black background; one fiducial marker in each corner (white square with a black inner square,
-/// 8% of the screen height, inset 2.5%) and a neutral-gray reference band along the middle 70% of each edge.
-/// The bands are what the LED glow next to them is compared against.
+/// Camera pattern (top to bottom, v in screen heights): fiducial markers in the corners (white square with a black inner
+/// square, 8% of the height, inset 2.5%); reference bands along the middle 70% of each edge (v 0.025–0.075 from the
+/// edge) that the LED glow next to them is compared with; the PC's status text (v ≈ 0.09–0.25); a black probe
+/// (v 0.28–0.56, camera black level); a row with the visual step code and two neutral reference patches (v ≈ 0.64–0.73,
+/// used to normalize camera white balance/exposure between frames); the PC's buttons (v ≈ 0.80–0.87).
 /// </para>
+/// Eye pattern: wide bands along the full length of every edge so the glow can be compared with the screen edge by eye.
 /// </summary>
 internal sealed class CalibrationLayout
 {
@@ -32,13 +42,23 @@ internal sealed class CalibrationLayout
     public const double GlowNear = 0.04, GlowFar = 0.14;    // × screen height beyond the edge
     public const double QrSize = 0.40;          // × screen height
 
-    /// <summary>White stage: 70% gray (0xB3 → 0.45 linear) leaves head-room so the photo doesn't clip.</summary>
-    public const int WhiteBandRgb = 0xB3B3B3;
+    // Step-code row and reference patches
+    public const double CodeCellSize = 0.05;    // × screen height
+    public const double CodeCellGap = 0.02;     // × screen height
+    public const double CodeRowCenter = 0.685;  // v
+    public const double RefPatchSize = 0.09;    // × screen height
+    public const double RefPatchOffset = 0.42;  // × screen height, horizontal distance of each patch centre from the middle
+    /// <summary>Neutral reference patch (≈ 0.22 linear): same in every camera frame.</summary>
+    public const int RefPatchRgb = 0x808080;
 
-    /// <summary>
-    /// Dark stage: the LEDs drop from 0.6 to 0.25 (× 0.417 in linear light). The screen reference drops by the same
-    /// factor (0.45 × 0.417 = 0.19 linear ≈ sRGB 0x78) so screen and glow keep the same relative exposure in the photo.
-    /// </summary>
+    /// <summary>Eye pattern: band thickness along the edges.</summary>
+    public const double EyeBandThickness = 0.13; // × screen height
+
+    /// <summary>White step: 70% gray (0xB3 → 0.45 linear) leaves head-room so the camera doesn't clip.</summary>
+    public const int WhiteBandRgb = 0xB3B3B3;
+    public const double WhiteBandLinear = 0.4508; // linear value of 0xB3
+
+    /// <summary>v1 dark stage band (0.25 LED level): kept for the v1 analyzer tests.</summary>
     public const int DarkBandRgb = 0x787878;
 
     public CalibrationLayout(double aspect)
@@ -100,7 +120,7 @@ internal sealed class CalibrationLayout
     };
 
     /// <summary>Area in the middle of the screen that stays black (used to estimate the photo's black level).</summary>
-    public RectD BlackProbe() => new(0.5 - Hx(0.3), 0.25, 0.5 + Hx(0.3), 0.75);
+    public RectD BlackProbe() => new(0.5 - Hx(0.3), 0.28, 0.5 + Hx(0.3), 0.56);
 
     public RectD QrArea()
     {
@@ -108,22 +128,89 @@ internal sealed class CalibrationLayout
         return new(0.5 - hx, 0.5 - QrSize / 2, 0.5 + hx, 0.5 + QrSize / 2);
     }
 
-    public CalibrationPattern BuildPattern(bool showQr, bool darkStage)
+    /// <summary>Cell <paramref name="i"/> (0..<see cref="StepCode.Cells"/>-1, left to right) of the step-code row.</summary>
+    public RectD CodeCell(int i)
     {
-        var rects = new List<PatternRect>(12);
+        double total = StepCode.Cells * CodeCellSize + (StepCode.Cells - 1) * CodeCellGap;
+        double x0 = 0.5 - Hx(total) / 2 + Hx(i * (CodeCellSize + CodeCellGap));
+        return new(x0, CodeRowCenter - CodeCellSize / 2, x0 + Hx(CodeCellSize), CodeRowCenter + CodeCellSize / 2);
+    }
+
+    /// <summary>Neutral reference patch: 0 = left of the code row, 1 = right.</summary>
+    public RectD RefPatch(int i)
+    {
+        double cx = 0.5 + (i == 0 ? -1 : 1) * Hx(RefPatchOffset), hw = Hx(RefPatchSize) / 2, hh = RefPatchSize / 2;
+        return new(cx - hw, CodeRowCenter - hh, cx + hw, CodeRowCenter + hh);
+    }
+
+    /// <summary>
+    /// Camera measurement pattern: markers, reference bands in <paramref name="bandRgb"/>, and (unless the QR code is
+    /// shown) the step code + neutral reference patches.
+    /// </summary>
+    public CalibrationPattern BuildMeasurePattern(int bandRgb, int code, bool showQr)
+    {
+        var rects = new List<PatternRect>(24);
         foreach (var m in Markers())
         {
-            rects.Add(new PatternRect((float)m.L, (float)m.T, (float)m.R, (float)m.B, 0xFFFFFF));
-            var i = Inner(m);
-            rects.Add(new PatternRect((float)i.L, (float)i.T, (float)i.R, (float)i.B, 0x000000));
+            rects.Add(Rect(m, 0xFFFFFF));
+            rects.Add(Rect(Inner(m), 0x000000));
         }
-        int band = darkStage ? DarkBandRgb : WhiteBandRgb;
-        foreach (var s in Enum.GetValues<Side>())
+        foreach (var s in Enum.GetValues<Side>()) rects.Add(Rect(Band(s), bandRgb));
+        if (!showQr)
         {
-            var b = Band(s);
-            rects.Add(new PatternRect((float)b.L, (float)b.T, (float)b.R, (float)b.B, band));
+            for (int i = 0; i < 2; i++) rects.Add(Rect(RefPatch(i), RefPatchRgb));
+            var cells = StepCode.Encode(code);
+            for (int i = 0; i < cells.Length; i++)
+                if (cells[i]) rects.Add(Rect(CodeCell(i), 0xFFFFFF));
         }
         var q = QrArea();
-        return new CalibrationPattern(rects, (float)q.L, (float)q.T, (float)q.R, (float)q.B, showQr);
+        return new CalibrationPattern(rects, (float)q.L, (float)q.T, (float)q.R, (float)q.B, showQr) { Code = showQr ? null : code };
     }
+
+    /// <summary>Eye pattern: wide bands of <paramref name="rgb"/> along the full length of every edge, black centre.</summary>
+    public CalibrationPattern BuildEyePattern(int rgb)
+    {
+        double t = EyeBandThickness, tx = Hx(EyeBandThickness);
+        var rects = new List<PatternRect>
+        {
+            Rect(new RectD(0, 0, 1, t), rgb),
+            Rect(new RectD(0, 1 - t, 1, 1), rgb),
+            Rect(new RectD(0, t, tx, 1 - t), rgb),
+            Rect(new RectD(1 - tx, t, 1, 1 - t), rgb),
+        };
+        var q = QrArea();
+        return new CalibrationPattern(rects, (float)q.L, (float)q.T, (float)q.R, (float)q.B, false) { EyeMode = true };
+    }
+
+    /// <summary>v1 pattern (white or dark band, no code). Kept for the analyzer tests.</summary>
+    public CalibrationPattern BuildPattern(bool showQr, bool darkStage)
+    {
+        var p = BuildMeasurePattern(darkStage ? DarkBandRgb : WhiteBandRgb, 0, showQr: true);
+        return p with { ShowQr = showQr };
+    }
+
+    private static PatternRect Rect(RectD r, int rgb) => new((float)r.L, (float)r.T, (float)r.R, (float)r.B, rgb);
+
+    // ------------------------------------------------------------------ levels
+
+    /// <summary>sRGB code (0..255) for a linear value.</summary>
+    public static int LinearToSrgb8(double lin)
+    {
+        lin = Math.Clamp(lin, 0, 1);
+        double v = lin <= 0.0031308 ? lin * 12.92 : 1.055 * Math.Pow(lin, 1 / 2.4) - 0.055;
+        return (int)Math.Round(v * 255);
+    }
+
+    /// <summary>
+    /// Neutral band for an LED gray level: the screen reference is scaled with the LED level (0.6 ↔ 0xB3) so screen and
+    /// glow keep the same relative exposure in the photo.
+    /// </summary>
+    public static int GrayBandRgb(double ledLevel)
+    {
+        int c = LinearToSrgb8(WhiteBandLinear * ledLevel / CalibrationMath.WhiteLevel);
+        return (c << 16) | (c << 8) | c;
+    }
+
+    /// <summary>Band showing one monitor primary (0 = R, 1 = G, 2 = B) at the white band level.</summary>
+    public static int PrimaryBandRgb(int channel) => 0xB3 << (8 * (2 - channel));
 }

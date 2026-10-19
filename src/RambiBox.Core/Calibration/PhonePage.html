@@ -13,246 +13,437 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--text);
     font: 17px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-text-size-adjust: 100%; }
-  main { max-width: 640px; margin: 0 auto; padding: 16px 16px calc(24px + env(safe-area-inset-bottom)); }
-  h1 { font-size: 22px; margin: 4px 0 12px; }
+  main { max-width: 680px; margin: 0 auto; padding: 14px 16px calc(24px + env(safe-area-inset-bottom)); }
+  h1 { font-size: 22px; margin: 4px 0 10px; }
   h1 small { color: var(--muted); font-weight: 400; font-size: 15px; display: block; }
+  h2 { font-size: 18px; margin: 0 0 8px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin: 12px 0; }
-  ol { margin: 0; padding-left: 22px; }
-  ol li { margin: 6px 0; }
-  .status { font-size: 15px; color: var(--muted); }
-  .status b { color: var(--text); font-weight: 600; }
-  button, .btn { display: block; width: 100%; border: 0; border-radius: 12px; padding: 16px; margin: 10px 0 0;
-    font-weight: 600; font-size: 18px; line-height: 1.2; font-family: inherit; color: #fff; background: var(--accent); cursor: pointer;
-    text-align: center; -webkit-tap-highlight-color: transparent; }
-  button.secondary { background: #2b2f38; color: var(--text); }
+  ol { margin: 0; padding-left: 22px; } ol li { margin: 6px 0; }
+  .muted { color: var(--muted); font-size: 15px; }
+  .small { font-size: 13px; color: var(--muted); }
+  button, .btn { display: block; width: 100%; border: 0; border-radius: 12px; padding: 15px; margin: 10px 0 0;
+    font-weight: 600; font-size: 17px; line-height: 1.2; font-family: inherit; color: #fff; background: var(--accent); cursor: pointer;
+    text-align: center; text-decoration: none; -webkit-tap-highlight-color: transparent; }
+  button.secondary, .btn.secondary { background: #2b2f38; color: var(--text); }
   button.ok { background: #1f9d68; }
-  button:disabled { opacity: .5; }
+  button.link { background: none; color: var(--muted); font-weight: 400; font-size: 15px; padding: 8px; text-decoration: underline; }
+  button:disabled { opacity: .45; }
   .hidden { display: none !important; }
-  .msg { font-size: 16px; margin: 0; }
-  .msg.bad { color: var(--bad); } .msg.good { color: var(--ok); } .msg.warn { color: var(--warn); }
-  .big { font-size: 34px; font-weight: 700; margin: 2px 0; }
-  .big small { font-size: 15px; color: var(--muted); font-weight: 400; }
-  .viewwrap { position: relative; margin: 12px 0 0; border-radius: 10px; overflow: hidden; background: #000; touch-action: none; }
-  canvas#view { display: block; width: 100%; height: auto; touch-action: none; }
-  .legend { font-size: 13px; color: var(--muted); margin-top: 6px; }
-  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 10px; vertical-align: -1px; }
+  .msg { margin: 0; } .bad { color: var(--bad); } .good { color: var(--ok); } .warn { color: var(--warn); }
+  .row { display: flex; gap: 10px; } .row > * { flex: 1; }
+  .big { font-size: 34px; font-weight: 700; } .big small { font-size: 15px; color: var(--muted); font-weight: 400; }
   .spinner { display: inline-block; width: 16px; height: 16px; border: 3px solid #fff5; border-top-color: #fff;
     border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: -3px; margin-right: 8px; }
   @keyframes spin { to { transform: rotate(360deg); } }
   input[type=file] { display: none; }
-  .row { display: flex; gap: 10px; } .row > * { flex: 1; }
+  .camwrap { position: relative; border-radius: 12px; overflow: hidden; background: #000; margin-top: 10px; touch-action: manipulation; }
+  .camwrap video { display: block; width: 100%; height: auto; }
+  .camwrap canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
+  .bar { height: 8px; border-radius: 4px; background: #2b2f38; overflow: hidden; margin: 8px 0 4px; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .4s; }
+  .hints { margin: 8px 0 0; padding: 0; list-style: none; }
+  .hints li { color: var(--warn); font-size: 15px; margin: 4px 0; }
+  .url { word-break: break-all; font: 13px/1.35 ui-monospace, Menlo, monospace; color: var(--muted); background: #0b0c0e; padding: 8px; border-radius: 8px; margin-top: 8px; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+  .tabs button { margin: 0; padding: 10px 6px; font-size: 15px; background: #2b2f38; color: var(--text); }
+  .tabs button.on { background: var(--accent); color: #fff; }
+  .padwrap { display: flex; justify-content: center; }
+  canvas#pad { width: min(84vw, 340px); height: min(84vw, 340px); border-radius: 16px; touch-action: none; display: block; }
+  .nudge { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .nudge button { margin: 0; padding: 12px 4px; font-size: 15px; background: #2b2f38; color: var(--text); }
+  .swatches { display: flex; gap: 8px; margin: 6px 0 4px; }
+  .swatches button { margin: 0; height: 46px; border-radius: 10px; border: 3px solid transparent; position: relative; padding: 0; }
+  .swatches button.on { border-color: #fff; }
+  .swatches button span { position: absolute; right: 3px; bottom: 1px; font-size: 12px; color: #000; background: #fffc; border-radius: 6px; padding: 0 4px; }
+  .ab { display: flex; gap: 10px; } .ab button { font-size: 22px; padding: 18px; background: #2b2f38; }
+  .ab button.on { background: var(--accent); }
+  .steps-small li { font-size: 15px; }
 </style>
 </head>
 <body>
 <main>
   <h1>RambiBox <small>LED color calibration</small></h1>
 
-  <div id="intro" class="card">
-    <ol>
-      <li>Turn off the room lights if possible.</li>
-      <li>Stand about 1.5–2&nbsp;m in front of the screen so the <b>whole screen and the glow around it</b> are in the photo.</li>
-      <li>Tap <b>Take photo</b>. Hold the phone level and steady.</li>
-    </ol>
-  </div>
+  <!-- connecting -->
+  <div id="vConnect" class="card"><span class="spinner"></span>Connecting to the PC…</div>
 
-  <div id="darkIntro" class="card hidden">
-    <p class="msg"><b>Dark-tone check.</b> The LEDs and the screen bands are dimmed now. Take one photo exactly like before.</p>
-  </div>
+  <!-- landing (plain http) -->
+  <div id="vChoose" class="hidden">
+    <div id="checking" class="card"><span class="spinner"></span>Checking whether the live camera is ready…</div>
 
-  <div class="card">
-    <div class="status" id="status">Connecting…</div>
-  </div>
-
-  <label id="takeBtn" class="btn" for="file">Take photo</label>
-  <input id="file" type="file" accept="image/*" capture="environment">
-
-  <div id="busy" class="card hidden"><span class="spinner"></span><span id="busyText">Uploading photo…</span></div>
-
-  <div id="result" class="card hidden">
-    <div id="errorBox" class="hidden">
-      <div class="big" id="errorPct">–</div>
-      <div class="status">color difference between LED glow and screen white (goal: below <span id="goal">3</span>%)</div>
+    <div id="setupCard" class="card hidden">
+      <h2>One-time setup for the live camera</h2>
+      <p class="muted">The live camera needs a secure page. RambiBox made its own certificate for this PC; your phone needs to trust it once.
+        It only works on your home network (private addresses) and can be removed any time in Settings → General → VPN &amp; Device Management.</p>
+      <div id="notSafari" class="hidden">
+        <p class="msg warn">iPhone only installs certificate profiles from <b>Safari</b>. Open this setup in Safari:</p>
+        <a id="openSafari" class="btn" href="#">Open in Safari</a>
+        <button id="copyLink" class="secondary">Copy link</button>
+        <div class="url" id="plainUrl"></div>
+        <p class="small">Or open Safari and type the address above. After the setup, come back to this browser — this page continues by itself.</p>
+      </div>
+      <div id="inSafari" class="hidden">
+        <a id="profileBtn" class="btn" href="#">1. Download the certificate profile</a>
+        <p class="small">Tap “Allow” when Safari asks.</p>
+      </div>
+      <ol class="steps-small" id="setupSteps">
+        <li>Download the profile (in Safari) and tap <b>Allow</b>.</li>
+        <li>Open <b>Settings</b> → <b>Profile Downloaded</b> (near the top) → <b>Install</b> → enter your passcode → <b>Install</b>.</li>
+        <li>Settings → <b>General</b> → <b>About</b> → <b>Certificate Trust Settings</b> → turn on full trust for “<span id="caName">RambiBox Local CA</span>”.</li>
+        <li>Come back to this page. It switches to the live camera automatically.</li>
+      </ol>
+      <p class="muted" id="waitTrust"><span class="spinner"></span>Waiting for the certificate…</p>
     </div>
-    <p id="resultMsg" class="msg"></p>
-    <div class="viewwrap"><canvas id="view"></canvas></div>
-    <div class="legend" id="legend"><i style="background:#4f8cff"></i>screen<i style="background:#3ecf8e"></i>glow sample<i style="background:#ff5d5d"></i>not usable</div>
-    <div id="cornerTools" class="hidden">
-      <p class="status">Drag the 4 round handles onto the 4 corners of the screen's picture area, then tap <b>Use these corners</b>.</p>
-      <button id="useCorners">Use these corners</button>
+
+    <div id="noLiveCard" class="card hidden">
+      <p class="msg warn" id="noLiveMsg"></p>
     </div>
-    <button id="editCorners" class="secondary hidden">Adjust screen corners</button>
+
+    <div id="videoOffer" class="card hidden">
+      <h2>No setup? Use a video instead</h2>
+      <p class="muted">Record a ~25 second video of the screen while the PC shows a color loop. Works without any setup — the live camera is just more convenient.</p>
+      <button id="useVideo" class="secondary">Use video instead (no setup)</button>
+    </div>
+    <button id="skipCam1" class="link">Skip the camera — fine-tune by eye only</button>
   </div>
 
-  <div id="darkOffer" class="card hidden">
-    <p class="msg"><b>Optional:</b> check dark tones (1 photo). Makes dim scenes stay neutral instead of drifting green/blue.</p>
-    <div class="row">
-      <button id="darkBtn">Check dark tones</button>
-      <button id="skipBtn" class="secondary">Skip</button>
+  <!-- live camera (https) -->
+  <div id="vLive" class="hidden">
+    <div class="card">
+      <div id="liveIntro">
+        <ol class="steps-small">
+          <li>Turn off the room lights if you can.</li>
+          <li>Stand 1.5–2 m in front of the screen so the <b>whole screen and the glow around it</b> are visible.</li>
+          <li>Hold the phone steady. The PC changes colors by itself; just keep pointing at it.</li>
+        </ol>
+        <button id="startCam">Start camera</button>
+      </div>
+      <div id="liveRun" class="hidden">
+        <div class="row" style="align-items:baseline">
+          <h2 id="liveStep" style="margin:0">Starting…</h2>
+          <div id="liveErr" class="big" style="text-align:right;flex:0 0 auto"></div>
+        </div>
+        <div class="bar"><i id="liveBar"></i></div>
+        <p class="muted" id="liveNote"></p>
+        <ul class="hints" id="liveHints"></ul>
+        <p class="small warn hidden" id="shieldsHint">Brave Shields add noise to camera images. For best accuracy turn off Shields for this page (lion icon in the address bar). Calibration continues anyway.</p>
+      </div>
+      <div class="camwrap hidden" id="camWrap">
+        <video id="cam" playsinline muted autoplay></video>
+        <canvas id="overlay"></canvas>
+      </div>
+      <p class="small" id="camLegend">Blue = screen reference, green = LED glow, red = not usable.</p>
+    </div>
+    <button id="toVideo" class="link">Camera trouble? Use a video instead</button>
+    <button id="skipCam2" class="link">Skip the camera — fine-tune by eye only</button>
+  </div>
+
+  <!-- video fallback -->
+  <div id="vVideo" class="hidden">
+    <div class="card">
+      <h2>Video calibration</h2>
+      <ol class="steps-small">
+        <li>Turn off the room lights if you can.</li>
+        <li>Tap <b>Record video</b>: the PC starts a color loop and your camera opens.</li>
+        <li>Film the <b>whole screen with the glow around it</b>, hold still and record at least <b id="minSecs">25</b> seconds (the PC shows the loop time).</li>
+        <li>Stop, then tap <b>Use Video</b>. The phone extracts frames and sends them to the PC.</li>
+      </ol>
+      <label id="recBtn" class="btn" for="vfile">Record video</label>
+      <input id="vfile" type="file" accept="video/*" capture="environment">
+      <p class="small">Tip: if the result looks off, set Settings → Camera → Record Video → HDR Video off.</p>
+      <div id="vProg" class="hidden">
+        <div class="bar"><i id="vBar"></i></div>
+        <p class="muted" id="vNote"></p>
+      </div>
+      <p class="msg bad hidden" id="vErr"></p>
+    </div>
+    <button id="skipCam3" class="link">Skip the camera — fine-tune by eye only</button>
+  </div>
+
+  <!-- eye fine-tune -->
+  <div id="vEye" class="hidden">
+    <div class="card">
+      <p class="msg good hidden" id="camSummary"></p>
+      <div class="tabs">
+        <button id="tabWhite">White</button>
+        <button id="tabDark">Dark tones</button>
+        <button id="tabColors">Colors A/B</button>
+      </div>
+      <div id="eyePadPart">
+        <p class="muted" id="eyeTip">Look at the glow on the wall and the white edge of the screen, not at the phone. Let your eyes adapt for a few seconds, then drag the dot until both whites look the same.</p>
+        <div class="padwrap"><canvas id="pad" width="680" height="680"></canvas></div>
+        <div class="nudge">
+          <span></span><button data-n="0,-1">▲ greener</button><span></span>
+          <button data-n="-1,0">◀ cooler</button><button id="resetPad">Reset</button><button data-n="1,0">warmer ▶</button>
+          <span></span><button data-n="0,1">▼ pinker</button><span></span>
+        </div>
+        <p class="small" id="padVal"></p>
+      </div>
+      <div id="eyeColorsPart" class="hidden">
+        <p class="muted">The screen edge and the LEDs show the same color. <b>A</b> = with the measured color correction, <b>B</b> = without. Tap A and B a few times and judge which glow matches the screen edge better.</p>
+        <div class="swatches" id="swatches"></div>
+        <div class="ab"><button id="showA">A</button><button id="showB">B</button></div>
+        <div class="row">
+          <button id="voteA" class="secondary">A is closer</button>
+          <button id="voteSame" class="secondary">Same</button>
+          <button id="voteB" class="secondary">B is closer</button>
+        </div>
+        <div class="row" style="align-items:center">
+          <button id="lessM" class="secondary">Less</button>
+          <p class="muted" style="text-align:center;margin:10px 0 0" id="strength"></p>
+          <button id="moreM" class="secondary">More</button>
+        </div>
+        <p class="small" id="votes"></p>
+      </div>
+      <button id="eyeNext">Next</button>
     </div>
   </div>
 
-  <button id="doneBtn" class="ok hidden">Done</button>
-
-  <div id="finished" class="card hidden">
+  <div id="vDone" class="card hidden">
     <p class="msg good"><b>All done!</b> The new LED colors are saved. You can close this page.</p>
   </div>
+
+  <div id="errorCard" class="card hidden"><p class="msg bad" id="errorMsg"></p></div>
+  <button id="cancelBtn" class="link">Cancel calibration (restore previous colors)</button>
 </main>
 
 <script>
 (function () {
   'use strict';
   var base = location.pathname.replace(/\/+$/, '');
+  var secure = location.protocol === 'https:';
   var $ = function (id) { return document.getElementById(id); };
-  var state = null, busy = false, photo = null /* canvas with the uploaded image */, last = null /* last result */;
-  var editing = false, handles = null, dragIdx = -1;
+  var state = null, view = '', polling = false, liveRunning = false, stream = null, wakeLock = null;
+  var userChoseVideo = false;
 
-  function show(el, on) { $(el).classList.toggle('hidden', !on); }
-  function setBusy(on, text) {
-    busy = on; show('busy', on); if (text) $('busyText').textContent = text;
-    $('takeBtn').style.opacity = on ? .5 : 1; $('takeBtn').style.pointerEvents = on ? 'none' : 'auto';
+  function show(id, on) { $(id).classList.toggle('hidden', !on); }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function setView(v) {
+    if (view === v) return;
+    view = v;
+    ['vConnect', 'vChoose', 'vLive', 'vVideo', 'vEye', 'vDone'].forEach(function (id) { show(id, id === v); });
+    show('cancelBtn', v !== 'vDone');
   }
+  function fail(text) { show('errorCard', !!text); $('errorMsg').textContent = text || ''; }
 
   function api(path, opts) {
-    return fetch(base + path, Object.assign({ cache: 'no-store' }, opts || {})).then(function (r) {
-      return r.json().catch(function () { throw new Error('HTTP ' + r.status); });
+    opts = Object.assign({ cache: 'no-store' }, opts || {});
+    return fetch(base + path, opts).then(function (r) {
+      return r.json().catch(function () { throw new Error('HTTP ' + r.status); }).then(function (j) {
+        if (j && j.state) state = j.state;
+        if (r.status === 403) throw new Error(j.message || 'Not allowed');
+        return j;
+      });
     });
   }
+  function post(path, body) {
+    var o = { method: 'POST' };
+    if (body !== undefined) { o.body = typeof body === 'string' || body instanceof Blob || body instanceof ArrayBuffer ? body : JSON.stringify(body); }
+    return api(path, o);
+  }
+  function requestWakeLock() {
+    try { if (navigator.wakeLock && !wakeLock) navigator.wakeLock.request('screen').then(function (l) { wakeLock = l; l.addEventListener('release', function () { wakeLock = null; }); }).catch(function () {}); } catch (e) { /* optional */ }
+  }
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && (view === 'vLive' || view === 'vEye')) requestWakeLock(); });
 
-  // ---------------------------------------------------------------- state polling
-  function render() {
+  // ---------------------------------------------------------------- routing by server state
+  function route() {
     if (!state) return;
-    $('status').innerHTML = '<b>' + esc(phaseLabel(state.phase)) + '</b> — ' + esc(state.status || '');
-    $('goal').textContent = state.convergedBelowPercent;
-    var dark = state.stage === 'dark';
-    show('intro', !dark && !state.finished);
-    show('darkIntro', dark && !state.finished);
-    show('finished', !!state.finished);
-    var active = !state.finished;
-    show('takeBtn', active);
-    $('takeBtn').textContent = state.photosAnalyzed > 0 ? 'Take another photo to verify' : 'Take photo';
-    show('doneBtn', active && state.photosAnalyzed > 0);
-    show('darkOffer', active && (state.whiteConverged || state.photosAnalyzed >= 3) && state.darkAvailable && !dark);
-    if (!active) { show('cornerTools', false); show('editCorners', false); }
+    fail('');
+    if (state.finished || state.mode === 'finished') { stopCamera(); setView('vDone'); return; }
+    if (state.mode === 'eye') { stopCamera(); setView('vEye'); renderEye(); return; }
+    if (state.mode === 'video') { setView('vVideo'); renderVideo(); return; }
+    if (state.mode === 'live') {
+      if (!secure && state.tls && state.tls.url) { location.replace(state.tls.url); return; }
+      setView('vLive');
+      if (!liveRunning) { show('liveIntro', true); }
+      return;
+    }
+    // choose
+    if (userChoseVideo) { setView('vVideo'); renderVideo(); return; }
+    if (secure) { setView('vLive'); return; }
+    if (view !== 'vChoose') { setView('vChoose'); landing(); }
   }
-  function phaseLabel(p) {
-    return { WaitingForPhone: 'Connecting', WaitingForPhoto: 'Ready', Analyzing: 'Analyzing', Adjusted: 'Adjusted',
-             Converged: 'Calibrated', PhotoRejected: 'Photo not usable', Failed: 'Stopped' }[p] || p;
-  }
-  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
-  var failures = 0;
   function poll() {
-    api('/state').then(function (s) { failures = 0; state = s; render(); })
-      .catch(function () { if (++failures > 3) $('status').innerHTML = '<b>Lost connection to the PC.</b> Is RambiBox still showing the calibration screen?'; })
-      .then(function () { if (!state || !state.finished) setTimeout(poll, 1500); });
+    if (polling) return;
+    polling = true;
+    var fails = 0;
+    (function tick() {
+      if (liveRunning || videoBusy) { setTimeout(tick, 1500); return; }
+      api('/state').then(function () { fails = 0; route(); })
+        .catch(function (e) { if (++fails > 3) fail('Lost connection to the PC. Is the calibration still running there? (' + e.message + ')'); })
+        .then(function () { if (!state || !(state.finished || state.mode === 'finished')) setTimeout(tick, 1500); });
+    })();
   }
 
-  // ---------------------------------------------------------------- photo capture
-  $('file').addEventListener('change', function (e) {
-    var f = e.target.files && e.target.files[0];
-    e.target.value = '';
-    if (!f || busy) return;
-    setBusy(true, 'Preparing photo…');
-    loadImage(f).then(function (src) {
-      var w = src.width, h = src.height, s = Math.min(1, 2000 / Math.max(w, h));
-      var c = document.createElement('canvas');
-      c.width = Math.max(1, Math.round(w * s)); c.height = Math.max(1, Math.round(h * s));
-      var ctx = c.getContext('2d');
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(src, 0, 0, c.width, c.height);
-      if (src.close) src.close();
-      photo = c;
-      return new Promise(function (res, rej) {
-        c.toBlob(function (b) { b ? res(b) : rej(new Error('Could not encode the photo')); }, 'image/jpeg', 0.92);
+  // ---------------------------------------------------------------- landing: live camera or setup
+  function ping(url) {
+    var ctl = window.AbortController ? new AbortController() : null;
+    var t = setTimeout(function () { if (ctl) ctl.abort(); }, 4000);
+    return fetch(url, { cache: 'no-store', mode: 'cors', signal: ctl ? ctl.signal : undefined })
+      .then(function (r) { clearTimeout(t); return r.ok; })
+      .catch(function () { clearTimeout(t); return false; });
+  }
+
+  function isSafari() {
+    var ua = navigator.userAgent;
+    if (navigator.brave) return false;
+    if (/CriOS|FxiOS|EdgiOS|OPiOS|OPT\/|GSA\/|DuckDuckGo|YaBrowser|Brave/i.test(ua)) return false;
+    return /iPhone|iPad|iPod|Macintosh/.test(ua) && /Safari/.test(ua);
+  }
+
+  var landingRunning = false;
+  function landing() {
+    if (landingRunning) return;
+    landingRunning = true;
+    show('checking', true); show('setupCard', false); show('noLiveCard', false); show('videoOffer', false);
+    (function waitTls(n) {
+      if (state && state.tls && state.tls.pending && n < 40) { setTimeout(function () { api('/state').then(function () { waitTls(n + 1); }, function () { waitTls(n + 1); }); }, 400); return; }
+      var t = state && state.tls;
+      if (!t || !t.ping) {
+        show('checking', false); show('noLiveCard', true); show('videoOffer', true);
+        $('noLiveMsg').textContent = (t && t.problem) || 'The live camera is not available.';
+        landingRunning = false;
+        return;
+      }
+      // the first ping right after the PC started may still be slow: try twice
+      ping(t.ping).then(function (ok) { return ok || sleep(800).then(function () { return ping(t.ping); }); }).then(function (ok) {
+        if (ok) { location.replace(t.url); return; }
+        show('checking', false); showSetup(); show('videoOffer', true);
+        (function again() {
+          if (view !== 'vChoose' || userChoseVideo) { landingRunning = false; return; }
+          ping(t.ping).then(function (ok2) { if (ok2) location.replace(t.url); else setTimeout(again, 2000); });
+        })();
       });
-    }).then(function (blob) {
-      setBusy(true, 'Uploading and analyzing…');
-      return api('/photo', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
-    }).then(showResult).catch(function (err) {
-      showMessage('Something went wrong: ' + err.message + '. Please try again.', 'bad');
-    }).then(function () { setBusy(false); });
+    })(0);
+  }
+
+  function showSetup() {
+    show('setupCard', true);
+    if (state.caName) $('caName').textContent = state.caName;
+    var safari = isSafari();
+    show('inSafari', safari); show('notSafari', !safari);
+    $('profileBtn').href = state.profileUrl || '#';
+    var setupUrl = (state.httpUrl || location.href.split('#')[0]) + '#setup';
+    $('plainUrl').textContent = setupUrl;
+    $('openSafari').href = 'x-safari-' + setupUrl;
+  }
+  $('copyLink').addEventListener('click', function () {
+    var text = $('plainUrl').textContent;
+    var done = function () { $('copyLink').textContent = 'Link copied — paste it in Safari'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () { selectUrl(); });
+    else selectUrl();
+  });
+  function selectUrl() {
+    var r = document.createRange(); r.selectNodeContents($('plainUrl'));
+    var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    $('copyLink').textContent = 'Long-press the selected address to copy it';
+  }
+  $('useVideo').addEventListener('click', function () { userChoseVideo = true; setView('vVideo'); renderVideo(); });
+  $('toVideo').addEventListener('click', function () {
+    stopCamera(); // the video routes work on this (secure) page as well
+    userChoseVideo = true; setView('vVideo'); renderVideo();
+  });
+  ['skipCam1', 'skipCam2', 'skipCam3'].forEach(function (id) {
+    $(id).addEventListener('click', function () { stopCamera(); post('/skip').then(route).catch(function (e) { fail(e.message); }); });
   });
 
-  function loadImage(file) {
-    // createImageBitmap honours the EXIF orientation and converts wide-gamut/HEIC photos to sRGB.
-    if (window.createImageBitmap) {
-      return createImageBitmap(file, { imageOrientation: 'from-image' }).catch(function () { return loadViaImg(file); });
-    }
-    return loadViaImg(file);
+  // ---------------------------------------------------------------- live camera
+  var cam = $('cam'), overlay = $('overlay'), grabCanvas = document.createElement('canvas');
+  var lastOverlay = null, lockedWb = false, expComp = null, farbleChecked = false;
+
+  $('startCam').addEventListener('click', function () {
+    fail('');
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { fail('This browser has no camera access on this page. Use the video instead.'); return; }
+    $('startCam').disabled = true;
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false })
+      .then(function (s) {
+        stream = s;
+        cam.srcObject = s;
+        return cam.play().catch(function () { /* autoplay muted */ });
+      })
+      .then(function () { return post('/live'); })
+      .then(function () {
+        show('liveIntro', false); show('liveRun', true); show('camWrap', true);
+        requestWakeLock();
+        checkFarbling();
+        liveRunning = true;
+        liveLoop();
+      })
+      .catch(function (e) {
+        $('startCam').disabled = false;
+        fail('Camera could not start: ' + (e && e.message ? e.message : e) + '. Allow camera access, or use the video instead.');
+      });
+  });
+
+  function stopCamera() {
+    liveRunning = false;
+    if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
   }
-  function loadViaImg(file) {
-    return new Promise(function (res, rej) {
-      var url = URL.createObjectURL(file), img = new Image();
-      img.onload = function () { URL.revokeObjectURL(url); res(img); };
-      img.onerror = function () { URL.revokeObjectURL(url); rej(new Error('This photo format is not supported')); };
-      img.src = url;
+
+  function grab() {
+    var w = cam.videoWidth, h = cam.videoHeight;
+    if (!w || !h) return Promise.resolve(null);
+    var s = Math.min(1, 1280 / Math.max(w, h));
+    grabCanvas.width = Math.round(w * s); grabCanvas.height = Math.round(h * s);
+    var ctx = grabCanvas.getContext('2d');
+    ctx.drawImage(cam, 0, 0, grabCanvas.width, grabCanvas.height);
+    return new Promise(function (res) { grabCanvas.toBlob(function (b) { res(b); }, 'image/jpeg', 0.9); });
+  }
+
+  function liveLoop() {
+    if (!liveRunning) return;
+    var t0 = Date.now();
+    grab().then(function (blob) {
+      if (!blob) return { wait: 300 };
+      return post('/frame', blob).then(function (r) {
+        onFrame(r);
+        return { wait: Math.max(r.delayMs || 0, 500 - (Date.now() - t0)) }; // ≤ 2 frames per second, one in flight
+      }, function (e) {
+        $('liveNote').textContent = 'Connection problem (' + e.message + ') — retrying…';
+        return { wait: 1000 };
+      });
+    }).then(function (x) {
+      if (state && state.mode !== 'live') { stopCamera(); route(); return; }
+      setTimeout(liveLoop, x.wait);
     });
   }
 
-  function showMessage(text, cls) {
-    show('result', true);
-    $('resultMsg').textContent = text;
-    $('resultMsg').className = 'msg ' + (cls || '');
+  function onFrame(r) {
+    if (r.state) state = r.state;
+    var s = state || {};
+    $('liveStep').textContent = (s.stepTitle || 'Measuring') + (s.stepCount ? '  (' + (s.stepIndex + 1) + '/' + s.stepCount + ')' : '');
+    $('liveBar').style.width = Math.round((s.progress || 0) * 100) + '%';
+    $('liveNote').textContent = r.note || r.message || s.instruction || '';
+    var showErr = (s.step === 'white' || s.step === 'white2') && typeof s.errorPercent === 'number';
+    $('liveErr').innerHTML = showErr ? s.errorPercent.toFixed(1) + '<small> %</small>' : '';
+    $('liveErr').style.color = showErr ? (s.errorPercent < s.targetPercent ? 'var(--ok)' : s.errorPercent < 3 * s.targetPercent ? 'var(--warn)' : 'var(--bad)') : '';
+    var ul = $('liveHints'); ul.textContent = '';
+    (r.hints || []).forEach(function (h) { var li = document.createElement('li'); li.textContent = h; ul.appendChild(li); });
+    if (r.overlay) { lastOverlay = r.overlay; drawOverlay(); }
+    if (r.overlay && r.overlay.corners && r.used) tryLockWhiteBalance();
+    if ((r.hints || []).some(function (h) { return /Overexposed/.test(h); })) lowerExposure();
   }
 
-  function showResult(r) {
-    last = r;
-    state = Object.assign(state || {}, r, { status: r.status });
-    render();
-    show('result', true);
-    editing = false;
-    show('cornerTools', false);
-    if (r.ok) {
-      var e = r.measuredErrorPercent;
-      $('errorPct').innerHTML = e.toFixed(1) + '<small> %</small>';
-      $('errorPct').style.color = e < r.convergedBelowPercent ? 'var(--ok)' : (e < 3 * r.convergedBelowPercent ? 'var(--warn)' : 'var(--bad)');
-      show('errorBox', true);
-      showMessage(r.message, e < r.convergedBelowPercent ? 'good' : '');
-    } else {
-      show('errorBox', false);
-      showMessage(r.message, 'bad');
-    }
-    if (!r.corners && r.failure === 'ScreenNotFound' && photo) startEditing(null);
-    show('editCorners', !!photo && !editing && !!r.corners);
-    draw();
-  }
-
-  // ---------------------------------------------------------------- drawing
-  function draw() {
-    var cv = $('view');
-    if (!photo) return;
-    var maxW = Math.min(1200, cv.parentElement.clientWidth * (window.devicePixelRatio || 1));
-    var s = maxW / photo.width;
-    cv.width = Math.round(photo.width * s); cv.height = Math.round(photo.height * s);
-    var ctx = cv.getContext('2d');
-    ctx.drawImage(photo, 0, 0, cv.width, cv.height);
-    var k = cv.width / (last && last.imageWidth ? last.imageWidth : photo.width);
-    var lw = Math.max(2, cv.width / 300);
-    if (last && last.sampleRegions && !editing) {
-      last.sampleRegions.forEach(function (rg) {
-        poly(ctx, rg.points, k);
-        ctx.lineWidth = lw;
-        ctx.strokeStyle = !rg.ok ? '#ff5d5d' : (rg.kind === 'glow' ? '#3ecf8e' : '#4f8cff');
-        ctx.fillStyle = !rg.ok ? 'rgba(255,93,93,.18)' : (rg.kind === 'glow' ? 'rgba(62,207,142,.18)' : 'rgba(79,140,255,.18)');
-        ctx.fill(); ctx.stroke();
-      });
-    }
-    var corners = editing ? handles : (last && last.corners);
-    if (corners) {
-      poly(ctx, corners, k);
-      ctx.lineWidth = lw; ctx.strokeStyle = editing ? '#ffb547' : '#ffffff'; ctx.setLineDash(editing ? [] : [lw * 3, lw * 2]);
-      ctx.stroke(); ctx.setLineDash([]);
-    }
-    if (editing) {
-      var r = Math.max(14, cv.width / 30);
-      handles.forEach(function (p, i) {
-        ctx.beginPath(); ctx.arc(p[0] * k, p[1] * k, r, 0, Math.PI * 2);
-        ctx.fillStyle = i === dragIdx ? 'rgba(255,181,71,.6)' : 'rgba(255,181,71,.3)'; ctx.fill();
-        ctx.lineWidth = lw; ctx.strokeStyle = '#ffb547'; ctx.stroke();
-        ctx.beginPath(); ctx.arc(p[0] * k, p[1] * k, lw, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
-        ctx.fillStyle = '#fff'; ctx.font = 'bold ' + Math.round(r * 0.8) + 'px system-ui';
-        ctx.fillText(['TL', 'TR', 'BR', 'BL'][i], p[0] * k + r * 1.1, p[1] * k - r * 0.6);
-      });
+  function drawOverlay() {
+    var o = lastOverlay, w = cam.clientWidth, h = cam.clientHeight;
+    var dpr = window.devicePixelRatio || 1;
+    overlay.width = Math.round(w * dpr); overlay.height = Math.round(h * dpr);
+    var ctx = overlay.getContext('2d');
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+    if (!o || !o.width) return;
+    var k = overlay.width / o.width, lw = Math.max(2, overlay.width / 300);
+    (o.regions || []).forEach(function (rg) {
+      poly(ctx, rg.points, k);
+      ctx.lineWidth = lw;
+      var c = !rg.ok ? '255,93,93' : rg.kind === 'glow' ? '62,207,142' : rg.kind === 'ref' ? '255,181,71' : '79,140,255';
+      ctx.strokeStyle = 'rgb(' + c + ')'; ctx.fillStyle = 'rgba(' + c + ',.15)';
+      ctx.fill(); ctx.stroke();
+    });
+    if (o.corners) {
+      poly(ctx, o.corners, k);
+      ctx.lineWidth = lw; ctx.strokeStyle = '#fff'; ctx.setLineDash([lw * 3, lw * 2]); ctx.stroke(); ctx.setLineDash([]);
     }
   }
   function poly(ctx, pts, k) {
@@ -260,75 +451,293 @@
     pts.forEach(function (p, i) { if (i) ctx.lineTo(p[0] * k, p[1] * k); else ctx.moveTo(p[0] * k, p[1] * k); });
     ctx.closePath();
   }
-  window.addEventListener('resize', draw);
+  window.addEventListener('resize', drawOverlay);
 
-  // ---------------------------------------------------------------- manual corners
-  function startEditing(corners) {
-    var w = photo.width, h = photo.height;
-    handles = corners ? corners.map(function (p) { return [p[0], p[1]]; })
-      : [[w * .25, h * .3], [w * .75, h * .3], [w * .75, h * .7], [w * .25, h * .7]];
-    editing = true;
-    show('cornerTools', true); show('editCorners', false);
-    draw();
+  function track() { return stream && stream.getVideoTracks ? stream.getVideoTracks()[0] : null; }
+  // Each frame is normalized by the neutral reference squares, so auto exposure / white balance may keep running;
+  // locking the white balance (where supported) just removes one source of noise. Exposure stays automatic so the
+  // dark steps are still bright enough.
+  function tryLockWhiteBalance() {
+    if (lockedWb) return;
+    lockedWb = true;
+    try {
+      var t = track(); if (!t || !t.getCapabilities) return;
+      var c = t.getCapabilities() || {};
+      if (c.whiteBalanceMode && c.whiteBalanceMode.indexOf('manual') >= 0) t.applyConstraints({ advanced: [{ whiteBalanceMode: 'manual' }] }).catch(function () {});
+    } catch (e) { /* optional */ }
   }
-  $('editCorners').addEventListener('click', function () { if (photo && last) startEditing(last.corners); });
+  function lowerExposure() {
+    try {
+      var t = track(); if (!t || !t.getCapabilities) return;
+      var c = t.getCapabilities() || {};
+      if (!c.exposureCompensation) return;
+      var cur = expComp == null ? ((t.getSettings() || {}).exposureCompensation || 0) : expComp;
+      expComp = Math.max(c.exposureCompensation.min, cur - (c.exposureCompensation.step || 0.33));
+      t.applyConstraints({ advanced: [{ exposureCompensation: expComp }] }).catch(function () {});
+    } catch (e) { /* optional */ }
+  }
+  $('camWrap').addEventListener('click', function (ev) {
+    // tap = point of interest for exposure/focus where supported
+    try {
+      var t = track(); if (!t || !t.getCapabilities) return;
+      var r = cam.getBoundingClientRect();
+      var p = { x: (ev.clientX - r.left) / r.width, y: (ev.clientY - r.top) / r.height };
+      t.applyConstraints({ advanced: [{ pointsOfInterest: [p] }] }).catch(function () {});
+      lowerExposure();
+    } catch (e) { /* optional */ }
+  });
 
-  function toImage(ev) {
-    var cv = $('view'), rect = cv.getBoundingClientRect();
-    var x = (ev.clientX - rect.left) / rect.width * photo.width, y = (ev.clientY - rect.top) / rect.height * photo.height;
-    return [x, y];
+  // Brave Shields "farbling" adds noise to canvas read-back. Detect it with a known pattern.
+  function checkFarbling() {
+    if (farbleChecked) return;
+    farbleChecked = true;
+    try {
+      var c = document.createElement('canvas'); c.width = 16; c.height = 16;
+      var ctx = c.getContext('2d');
+      ctx.fillStyle = '#3c78b4'; ctx.fillRect(0, 0, 16, 16);
+      ctx.fillStyle = '#d2501e'; ctx.fillRect(4, 4, 8, 8);
+      var d = ctx.getImageData(0, 0, 16, 16).data, bad = 0;
+      for (var y = 0; y < 16; y++) for (var x = 0; x < 16; x++) {
+        var o = (y * 16 + x) * 4, inner = x >= 4 && x < 12 && y >= 4 && y < 12;
+        var e = inner ? [210, 80, 30] : [60, 120, 180];
+        if (d[o] !== e[0] || d[o + 1] !== e[1] || d[o + 2] !== e[2]) bad++;
+      }
+      show('shieldsHint', bad > 0 || !!navigator.brave);
+      if (navigator.brave && bad === 0) show('shieldsHint', false);
+    } catch (e) { /* ignore */ }
   }
-  var cvEl = $('view');
-  cvEl.addEventListener('pointerdown', function (ev) {
-    if (!editing) return;
-    var p = toImage(ev), best = -1, bd = Infinity;
-    handles.forEach(function (h, i) { var d = Math.hypot(h[0] - p[0], h[1] - p[1]); if (d < bd) { bd = d; best = i; } });
-    if (bd < photo.width * 0.12) {
-      dragIdx = best;
-      try { cvEl.setPointerCapture(ev.pointerId); } catch (e) { /* capture is optional */ }
-      ev.preventDefault(); draw();
+
+  // ---------------------------------------------------------------- video fallback
+  var videoBusy = false;
+  function renderVideo() {
+    var s = state || {};
+    var secs = Math.ceil(((s.video && s.video.loopSeconds) || 20) + 5);
+    $('minSecs').textContent = secs;
+  }
+  $('recBtn').addEventListener('click', function () {
+    // start the color loop on the PC while the camera opens
+    $('vErr').classList.add('hidden');
+    post('/video/start').catch(function () {});
+  });
+  $('vfile').addEventListener('change', function (e) {
+    var f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!f || videoBusy) return;
+    processVideo(f);
+  });
+
+  function processVideo(file) {
+    videoBusy = true;
+    show('vProg', true); $('vErr').classList.add('hidden');
+    $('recBtn').style.opacity = .5; $('recBtn').style.pointerEvents = 'none';
+    var v = document.createElement('video');
+    v.muted = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.preload = 'auto';
+    // in the document (but invisible): some iOS versions only decode frames of attached videos
+    v.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none';
+    document.body.appendChild(v);
+    var url = URL.createObjectURL(file);
+    v.src = url;
+    var cleanup = function () { URL.revokeObjectURL(url); try { v.removeAttribute('src'); v.load(); v.remove(); } catch (e) { /* ignore */ } };
+    var canvas = document.createElement('canvas');
+    var note = function (t) { $('vNote').textContent = t; };
+    note('Opening the video…');
+    once(v, 'loadedmetadata', 15000).then(function () {
+      // iOS decodes frames for drawing only after playback has started once
+      return v.play().then(function () { v.pause(); }, function () {});
+    }).then(function () {
+      var dur = v.duration;
+      if (!isFinite(dur) || dur <= 0) throw new Error('Could not read the video length');
+      var times = [];
+      for (var t = 0.2; t < dur - 0.05; t += 0.4) times.push(t);
+      if (times.length > 150) times = times.slice(0, 150); // first minute is plenty
+      var batch = [], sent = 0, first = true;
+      var flush = function () {
+        if (!batch.length) return Promise.resolve();
+        var parts = batch; batch = [];
+        var size = 4; parts.forEach(function (p) { size += 12 + p.data.byteLength; });
+        var buf = new Uint8Array(size), dv = new DataView(buf.buffer);
+        buf.set([82, 66, 86, 49], 0); // "RBV1"
+        var pos = 4;
+        parts.forEach(function (p) { dv.setFloat64(pos, p.t, true); dv.setInt32(pos + 8, p.data.byteLength, true); buf.set(new Uint8Array(p.data), pos + 12); pos += 12 + p.data.byteLength; });
+        var q = first ? '?first=1' : ''; first = false;
+        return post('/video/frames' + q, buf.buffer).then(function (r) {
+          if (!r.ok) throw new Error(r.message || 'upload failed');
+          note('Sent ' + r.received + ' frames, ' + r.recognized + ' show the color loop…');
+        });
+      };
+      var i = 0;
+      var next = function () {
+        if (i >= times.length) return flush();
+        var t = times[i++];
+        $('vBar').style.width = Math.round(i / times.length * 100) + '%';
+        return seek(v, t).then(function () {
+          var w = v.videoWidth, h = v.videoHeight, s = Math.min(1, 1280 / Math.max(w, h));
+          canvas.width = Math.round(w * s); canvas.height = Math.round(h * s);
+          canvas.getContext('2d').drawImage(v, 0, 0, canvas.width, canvas.height);
+          return new Promise(function (res) { canvas.toBlob(function (b) { res(b); }, 'image/jpeg', 0.9); });
+        }).then(function (b) { return b ? b.arrayBuffer() : null; }).then(function (ab) {
+          if (ab) batch.push({ t: t, data: ab });
+          sent++;
+          if (sent % 4 === 0) note('Reading frame ' + sent + ' of ' + times.length + '…');
+          return batch.length >= 6 ? flush() : null;
+        }).then(next);
+      };
+      return next();
+    }).then(function () {
+      note('Calculating…');
+      return post('/video/done');
+    }).then(function (r) {
+      cleanup();
+      videoBusy = false;
+      $('recBtn').style.opacity = 1; $('recBtn').style.pointerEvents = 'auto';
+      if (!r.ok) { show('vProg', false); $('vErr').textContent = r.message || 'The video could not be used.'; $('vErr').classList.remove('hidden'); return; }
+      route();
+    }).catch(function (e) {
+      cleanup();
+      videoBusy = false;
+      $('recBtn').style.opacity = 1; $('recBtn').style.pointerEvents = 'auto';
+      show('vProg', false);
+      $('vErr').textContent = 'Video problem: ' + (e && e.message ? e.message : e) + '. Please try again.';
+      $('vErr').classList.remove('hidden');
+    });
+  }
+  function once(el, ev, timeout) {
+    return new Promise(function (res, rej) {
+      var t = setTimeout(function () { rej(new Error('timeout waiting for ' + ev)); }, timeout || 10000);
+      el.addEventListener(ev, function h() { clearTimeout(t); el.removeEventListener(ev, h); res(); });
+      el.addEventListener('error', function () { clearTimeout(t); rej(new Error('this video format cannot be read')); }, { once: true });
+    });
+  }
+  function seek(v, t) {
+    var p = once(v, 'seeked', 8000);
+    v.currentTime = t;
+    return p;
+  }
+
+  // ---------------------------------------------------------------- eye fine-tune
+  var pad = $('pad'), dragging = false, padPos = { t: 0, m: 0 }, lastSent = 0, sendTimer = null, eyeStage = '';
+  function renderEye() {
+    var s = state, e = s.eye;
+    requestWakeLock();
+    if (s.summary) { $('camSummary').textContent = s.summary; show('camSummary', true); }
+    if (e.stage !== eyeStage) {
+      eyeStage = e.stage;
+      padPos = e.stage === 'dark' ? { t: e.td, m: e.md } : { t: e.t, m: e.m };
     }
-  });
-  cvEl.addEventListener('pointermove', function (ev) {
-    if (dragIdx < 0) return;
-    var p = toImage(ev);
-    handles[dragIdx] = [Math.max(0, Math.min(photo.width, p[0])), Math.max(0, Math.min(photo.height, p[1]))];
-    ev.preventDefault(); draw();
-  });
-  function endDrag() { if (dragIdx >= 0) { dragIdx = -1; draw(); } }
-  cvEl.addEventListener('pointerup', endDrag);
-  cvEl.addEventListener('pointercancel', endDrag);
-
-  $('useCorners').addEventListener('click', function () {
-    if (busy || !handles) return;
-    setBusy(true, 'Analyzing with your corners…');
-    var k = last && last.imageWidth ? last.imageWidth / photo.width : 1;
-    var pts = handles.map(function (p) { return [p[0] * k, p[1] * k]; });
-    api('/corners', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ corners: pts }) })
-      .then(showResult)
-      .catch(function (err) { showMessage('Something went wrong: ' + err.message, 'bad'); })
-      .then(function () { setBusy(false); });
-  });
-
-  // ---------------------------------------------------------------- stages / finish
-  function finish() {
-    if (busy) return;
-    setBusy(true, 'Saving…');
-    api('/finish', { method: 'POST' }).then(function (s) { state = s; render(); show('result', false); show('doneBtn', false); })
-      .catch(function (err) { showMessage('Could not reach the PC: ' + err.message, 'bad'); })
-      .then(function () { setBusy(false); });
+    $('tabWhite').classList.toggle('on', e.stage === 'white');
+    $('tabDark').classList.toggle('on', e.stage === 'dark');
+    $('tabColors').classList.toggle('on', e.stage === 'colors');
+    $('tabColors').disabled = !s.hasMatrix;
+    var colors = e.stage === 'colors';
+    show('eyePadPart', !colors); show('eyeColorsPart', colors);
+    $('eyeTip').textContent = e.stage === 'dark'
+      ? 'Now the screen edge and the LEDs show a dark gray. Compare the dim glow with the gray edge and drag until the tint matches. White stays as it is.'
+      : 'Look at the glow on the wall and the white edge of the screen, not at the phone. Let your eyes adapt for a few seconds, then drag the dot until both whites look the same.';
+    $('eyeNext').textContent = e.stage === 'white' ? 'Next: dark tones' : (e.stage === 'dark' && s.hasMatrix) ? 'Next: colors A/B' : 'Done — save';
+    if (colors) renderColors(); else drawPad();
   }
-  $('doneBtn').addEventListener('click', finish);
-  $('skipBtn').addEventListener('click', finish);
-  $('darkBtn').addEventListener('click', function () {
-    if (busy) return;
-    api('/dark', { method: 'POST' }).then(function (s) {
-      state = s; render(); show('result', false); photo = null; last = null;
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }).catch(function (err) { showMessage('Could not reach the PC: ' + err.message, 'bad'); });
+  function drawPad() {
+    var ctx = pad.getContext('2d'), W = pad.width, H = pad.height;
+    var g = ctx.createLinearGradient(0, 0, W, 0);
+    g.addColorStop(0, '#7fa8ff'); g.addColorStop(0.5, '#f4f4f4'); g.addColorStop(1, '#ffb070');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    var g2 = ctx.createLinearGradient(0, 0, 0, H);
+    g2.addColorStop(0, 'rgba(90,220,110,.55)'); g2.addColorStop(0.5, 'rgba(255,255,255,0)'); g2.addColorStop(1, 'rgba(240,90,220,.55)');
+    ctx.fillStyle = g2; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(W / 2, 0); ctx.lineTo(W / 2, H); ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.stroke();
+    ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.font = '600 26px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('greener', W / 2, 34); ctx.fillText('pinker', W / 2, H - 16);
+    ctx.save(); ctx.translate(26, H / 2); ctx.rotate(-Math.PI / 2); ctx.fillText('cooler', 0, 0); ctx.restore();
+    ctx.save(); ctx.translate(W - 26, H / 2); ctx.rotate(Math.PI / 2); ctx.fillText('warmer', 0, 0); ctx.restore();
+    var x = W / 2 + padPos.t * (W / 2 - 30), y = H / 2 + padPos.m * (H / 2 - 30);
+    ctx.beginPath(); ctx.arc(x, y, 22, 0, Math.PI * 2); ctx.fillStyle = 'rgba(16,17,20,.85)'; ctx.fill();
+    ctx.lineWidth = 6; ctx.strokeStyle = '#fff'; ctx.stroke();
+    $('padVal').textContent = 'warm ' + fmt(padPos.t) + ' · tint ' + fmt(padPos.m) + '   (0 / 0 = camera result)';
+  }
+  function fmt(v) { return (v > 0 ? '+' : '') + v.toFixed(2); }
+  function padFromEvent(ev) {
+    var r = pad.getBoundingClientRect();
+    var x = (ev.clientX - r.left) / r.width * pad.width, y = (ev.clientY - r.top) / r.height * pad.height;
+    padPos = { t: clamp((x - pad.width / 2) / (pad.width / 2 - 30)), m: clamp((y - pad.height / 2) / (pad.height / 2 - 30)) };
+    drawPad(); sendPad(false);
+  }
+  function clamp(v) { return Math.max(-1, Math.min(1, v)); }
+  function sendPad(force) {
+    var now = Date.now();
+    clearTimeout(sendTimer);
+    if (!force && now - lastSent < 100) { sendTimer = setTimeout(function () { sendPad(true); }, 100 - (now - lastSent)); return; }
+    lastSent = now;
+    post('/eye', { action: 'pad', t: padPos.t, m: padPos.m }).catch(function (e) { fail(e.message); });
+  }
+  pad.addEventListener('pointerdown', function (ev) { dragging = true; try { pad.setPointerCapture(ev.pointerId); } catch (e) { /* optional */ } padFromEvent(ev); ev.preventDefault(); });
+  pad.addEventListener('pointermove', function (ev) { if (dragging) { padFromEvent(ev); ev.preventDefault(); } });
+  function endPad() { if (dragging) { dragging = false; sendPad(true); } }
+  pad.addEventListener('pointerup', endPad); pad.addEventListener('pointercancel', endPad);
+  Array.prototype.forEach.call(document.querySelectorAll('.nudge button[data-n]'), function (b) {
+    b.addEventListener('click', function () {
+      var d = b.getAttribute('data-n').split(',').map(Number);
+      padPos = { t: clamp(padPos.t + d[0] * 0.05), m: clamp(padPos.m + d[1] * 0.05) };
+      drawPad(); sendPad(true);
+    });
+  });
+  $('resetPad').addEventListener('click', function () {
+    padPos = { t: 0, m: 0 }; drawPad();
+    post('/eye', { action: 'reset' }).then(renderEye).catch(function (e) { fail(e.message); });
+  });
+  function setStage(st) { post('/eye', { action: 'stage', stage: st }).then(function () { eyeStage = ''; renderEye(); }).catch(function (e) { fail(e.message); }); }
+  $('tabWhite').addEventListener('click', function () { setStage('white'); });
+  $('tabDark').addEventListener('click', function () { setStage('dark'); });
+  $('tabColors').addEventListener('click', function () { setStage('colors'); });
+  $('eyeNext').addEventListener('click', function () {
+    var e = state.eye;
+    if (e.stage === 'white') setStage('dark');
+    else if (e.stage === 'dark' && state.hasMatrix) setStage('colors');
+    else finish();
   });
 
-  poll();
+  function renderColors() {
+    var e = state.eye, sw = $('swatches');
+    if (!sw.children.length) {
+      e.colors.forEach(function (c, i) {
+        var b = document.createElement('button');
+        b.style.background = c.css; b.setAttribute('aria-label', c.name);
+        b.addEventListener('click', function () { post('/eye', { action: 'show', color: i, variant: 'A' }).then(renderEye).catch(function (er) { fail(er.message); }); });
+        sw.appendChild(b);
+      });
+    }
+    Array.prototype.forEach.call(sw.children, function (b, i) { b.classList.toggle('on', i === e.color); });
+    $('showA').classList.toggle('on', e.variant === 'A');
+    $('showB').classList.toggle('on', e.variant === 'B');
+    $('strength').textContent = 'Correction strength ' + Math.round(state.matrixStrength * 100) + ' %';
+    $('votes').textContent = 'Votes — A: ' + e.votesA + ' · B: ' + e.votesB + ' · same: ' + e.votesSame +
+      '. The correction is kept only if A wins.';
+  }
+  $('showA').addEventListener('click', function () { post('/eye', { action: 'show', variant: 'A' }).then(renderEye).catch(function (e) { fail(e.message); }); });
+  $('showB').addEventListener('click', function () { post('/eye', { action: 'show', variant: 'B' }).then(renderEye).catch(function (e) { fail(e.message); }); });
+  function vote(v) { post('/eye', { action: 'vote', variant: v, color: state.eye.color }).then(renderEye).catch(function (e) { fail(e.message); }); }
+  $('voteA').addEventListener('click', function () { vote('A'); });
+  $('voteB').addEventListener('click', function () { vote('B'); });
+  $('voteSame').addEventListener('click', function () { vote('same'); });
+  $('lessM').addEventListener('click', function () { post('/eye', { action: 'strength', delta: -1 }).then(renderEye).catch(function (e) { fail(e.message); }); });
+  $('moreM').addEventListener('click', function () { post('/eye', { action: 'strength', delta: 1 }).then(renderEye).catch(function (e) { fail(e.message); }); });
+
+  function finish() {
+    post('/finish').then(function () { setView('vDone'); }).catch(function (e) { fail('Could not reach the PC: ' + e.message); });
+  }
+  $('cancelBtn').addEventListener('click', function () {
+    if (!window.confirm('Cancel the calibration and restore the previous LED colors?')) return;
+    stopCamera();
+    post('/cancel').then(function () { setView('vDone'); $('vDone').querySelector('p').textContent = 'Calibration cancelled — the previous LED colors are back.'; })
+      .catch(function (e) { fail(e.message); });
+  });
+
+  // ---------------------------------------------------------------- start
+  api('/state').then(function () {
+    if (!secure && location.hash === '#setup' && state.mode !== 'eye') { setView('vChoose'); landing(); }
+    else route();
+    poll();
+  }).catch(function (e) { fail('Could not reach the PC: ' + e.message); poll(); });
 })();
 </script>
 </body>

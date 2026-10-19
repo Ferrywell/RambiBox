@@ -1,12 +1,13 @@
 <Window x:Class="RambiBox.App.Views.CalibrationWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:RambiBox.App.Views"
         Title="RambiBox – color calibration" WindowStyle="None" ResizeMode="NoResize" Topmost="True"
         Background="Black" WindowStartupLocation="Manual" ShowActivated="True"
         Icon="/Assets/RambiBox.ico" ThemeMode="Dark" Width="800" Height="450">
     <Grid x:Name="Root" Background="Black" SnapsToDevicePixels="True" UseLayoutRounding="True">
-        <!-- the measurement pattern (normalized rectangles) -->
-        <Canvas x:Name="PatternCanvas" IsHitTestVisible="False" />
+        <!-- the measurement / eye pattern (one element, drawn pixel-exact) -->
+        <local:PatternSurface x:Name="Surface" IsHitTestVisible="False" />
 
         <!-- QR code inside Pattern.QrArea -->
         <Canvas x:Name="QrCanvas">
@@ -22,21 +23,24 @@
             </StackPanel>
         </Canvas>
 
-        <!-- status: between the top band and the center (kept away from the measurement areas) -->
+        <!-- status: camera patterns → between the top band and the black probe; eye patterns → centre -->
         <StackPanel x:Name="StatusPanel" HorizontalAlignment="Center" VerticalAlignment="Top" MaxWidth="900">
-            <TextBlock x:Name="StatusText" Foreground="#D8D8D8" FontSize="20" TextAlignment="Center" TextWrapping="Wrap"
+            <TextBlock x:Name="StatusText" Foreground="#C8C8C8" FontSize="20" TextAlignment="Center" TextWrapping="Wrap"
                        AutomationProperties.LiveSetting="Polite" />
-            <TextBlock x:Name="DetailText" Foreground="#8A8A8A" FontSize="14" TextAlignment="Center" TextWrapping="Wrap" Margin="0,6,0,0" />
+            <TextBlock x:Name="DetailText" Foreground="#7A7A7A" FontSize="14" TextAlignment="Center" TextWrapping="Wrap" Margin="0,6,0,0" />
+            <Border x:Name="ProgressTrack" Height="3" Background="#262626" Margin="0,8,0,0" CornerRadius="1.5" Visibility="Collapsed">
+                <Border x:Name="ProgressFill" HorizontalAlignment="Left" Background="#6A6A6A" CornerRadius="1.5" Width="0" />
+            </Border>
             <TextBlock x:Name="HintText" Foreground="#8A8A8A" FontSize="13" TextAlignment="Center" TextWrapping="Wrap" Margin="0,8,0,0"
                        Text="If your phone can't open the page, allow RambiBox in the Windows Firewall prompt (Private networks) and make sure the phone is on the same Wi-Fi." />
         </StackPanel>
 
-        <!-- buttons: below the center, above the bottom band -->
+        <!-- buttons: above the bottom band, below the step-code row -->
         <StackPanel x:Name="ButtonPanel" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom">
             <Button x:Name="CancelButton" Content="Cancel" MinWidth="120" Margin="0,0,12,0" Click="OnCancel" IsCancel="True"
                     ToolTip="Stop and restore the previous colors (Esc)." />
             <Button x:Name="DoneButton" Content="Done" MinWidth="120" Click="OnDone" Style="{DynamicResource AccentButtonStyle}"
-                    ToolTip="Stop and keep the new white balance." />
+                    ToolTip="Stop and keep the new colors." />
         </StackPanel>
     </Grid>
 </Window>

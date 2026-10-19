@@ -1,11 +1,15 @@
+using System.ComponentModel;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
 namespace RambiBox.Core.Calibration;
 
 internal sealed record MiniHttpRequest(string Method, string Path, string Query, IReadOnlyDictionary<string, string> Headers,
-    byte[] Body, IPAddress Remote);
+    byte[] Body, IPAddress Remote, bool IsTls = false);
 
 internal sealed record MiniHttpResponse(int Status, string ContentType, byte[] Body, IReadOnlyDictionary<string, string>? Headers = null)
 {
@@ -18,6 +22,8 @@ internal sealed record MiniHttpResponse(int Status, string ContentType, byte[] B
 /// the LAN). One request per connection (Connection: close), bounded header/body sizes, read timeouts and a cap on
 /// concurrent connections, both in total and per client IP (so one LAN host holding connections open with slow
 /// headers cannot lock the phone out). Never throws out of its background tasks.
+/// With <see cref="ServerCertificate"/> set it speaks HTTPS instead (TLS 1.2/1.3 via SslStream; the handshake must
+/// finish within <see cref="HeaderTimeout"/>, like the headers).
 /// </summary>
 internal sealed class MiniHttpServer : IDisposable
 {
@@ -50,6 +56,11 @@ internal sealed class MiniHttpServer : IDisposable
     /// <summary>Time allowed for the request line + headers; slow-header clients are dropped after this.</summary>
     public TimeSpan HeaderTimeout { get; init; } = TimeSpan.FromSeconds(5);
     public TimeSpan BodyTimeout { get; init; } = TimeSpan.FromSeconds(120);
+
+    /// <summary>When set, connections are TLS (HTTPS) with this certificate (must have a private key).</summary>
+    public X509Certificate2? ServerCertificate { get; init; }
+
+    public bool IsTls => ServerCertificate is not null;
 
     /// <summary>Client IP of a connection. Tests substitute other addresses to simulate several LAN hosts.</summary>
     internal Func<IPEndPoint, IPAddress> ClientAddress { get; init; } = ep => ep.Address;
@@ -131,13 +142,13 @@ internal sealed class MiniHttpServer : IDisposable
             }
             if (!TryEnterClient(ip))
             {
-                Reject(client, "Too many connections from this device."); // per-IP cap
+                Reject(client, "Too many connections from this device.", IsTls); // per-IP cap
                 continue;
             }
             if (!_slots.Wait(0))
             {
                 LeaveClient(ip);
-                Reject(client, "Server busy."); // too many concurrent connections in total
+                Reject(client, "Server busy.", IsTls); // too many concurrent connections in total
                 continue;
             }
             Interlocked.Increment(ref _activeTasks);
@@ -183,10 +194,11 @@ internal sealed class MiniHttpServer : IDisposable
     /// Answers 503 right away and closes the connection. Runs on the accept loop: a ~200-byte write into a fresh
     /// socket's empty send buffer does not block in practice, and a send timeout bounds it anyway.
     /// </summary>
-    private static void Reject(TcpClient client, string message)
+    private static void Reject(TcpClient client, string message, bool tls)
     {
         try
         {
+            if (tls) return; // no plain-text answer possible on a TLS port: just close (finally)
             client.Client.SendTimeout = 500;
             client.Client.Send(Format(MiniHttpResponse.Text(503, message), headOnly: false));
             client.Client.Shutdown(SocketShutdown.Send);
@@ -201,9 +213,33 @@ internal sealed class MiniHttpServer : IDisposable
     private async Task Serve(TcpClient client, IPAddress remote, CancellationToken serverCt)
     {
         client.NoDelay = true;
-        var stream = client.GetStream();
+        Stream stream = client.GetStream();
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(serverCt);
         cts.CancelAfter(HeaderTimeout);
+        SslStream? ssl = null;
+        if (ServerCertificate is { } cert)
+        {
+            ssl = new SslStream(stream, leaveInnerStreamOpen: false);
+            try
+            {
+                await ssl.AuthenticateAsServerAsync(new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = cert,
+                    EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                    ClientCertificateRequired = false,
+                    CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                    ApplicationProtocols = [SslApplicationProtocol.Http11],
+                }, cts.Token).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is AuthenticationException or IOException or OperationCanceledException or Win32Exception)
+            {
+                // Usually the phone does not trust the certificate yet (that is how the page detects it): not an error.
+                await ssl.DisposeAsync().ConfigureAwait(false);
+                return;
+            }
+            stream = ssl;
+        }
+        await using var sslScope = ssl;
 
         // ---- headers
         var buf = new byte[MaxHeaderBytes];
@@ -263,7 +299,7 @@ internal sealed class MiniHttpServer : IDisposable
             }
             if (cl > _maxBodyBytes)
             {
-                await Write(stream, MiniHttpResponse.Text(413, "Photo too large"), cts.Token).ConfigureAwait(false);
+                await Write(stream, MiniHttpResponse.Text(413, "Upload too large"), cts.Token).ConfigureAwait(false);
                 return;
             }
             body = new byte[cl];
@@ -278,7 +314,7 @@ internal sealed class MiniHttpServer : IDisposable
             }
         }
 
-        var req = new MiniHttpRequest(method, path, query, headers, body, remote);
+        var req = new MiniHttpRequest(method, path, query, headers, body, remote, IsTls);
         MiniHttpResponse resp;
         try { resp = await _handler(req, serverCt).ConfigureAwait(false); }
         catch (Exception ex)
@@ -298,7 +334,7 @@ internal sealed class MiniHttpServer : IDisposable
         return -1;
     }
 
-    private static async Task Write(NetworkStream stream, MiniHttpResponse r, CancellationToken ct, bool headOnly = false)
+    private static async Task Write(Stream stream, MiniHttpResponse r, CancellationToken ct, bool headOnly = false)
     {
         await stream.WriteAsync(Format(r, headOnly: true), ct).ConfigureAwait(false);
         if (!headOnly && r.Body.Length > 0) await stream.WriteAsync(r.Body, ct).ConfigureAwait(false);
@@ -337,6 +373,7 @@ internal sealed class MiniHttpServer : IDisposable
         409 => "Conflict",
         411 => "Length Required",
         413 => "Payload Too Large",
+        429 => "Too Many Requests",
         431 => "Request Header Fields Too Large",
         500 => "Internal Server Error",
         503 => "Service Unavailable",

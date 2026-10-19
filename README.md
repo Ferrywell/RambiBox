@@ -21,9 +21,15 @@ RambiBox lives in the system tray: left-click opens the window, right-click give
 - **Static color** and **mood light** (color cycle, rainbow, breathe).
 - **Automatic device detection**, also when the USB cable is moved to another port (new COM number).
   Unknown serial devices are never probed repeatedly, Bluetooth and modem ports never.
-- **Phone color calibration**: scan the QR code, photograph the screen with the glow around it; the white balance
-  (and optionally per-channel dark-tone correction) is computed and applied live. Phone and PC must be on the same
-  network; allow RambiBox in the Windows Firewall (button on the Calibration page, private networks only).
+- **Phone color calibration**: scan the QR code and point the phone at the screen. RambiBox runs a color loop on the
+  screen and the LEDs together (room light → white → dark grays → white → red/green/blue, each frame tagged with a
+  visual step code) and corrects white balance and per-channel dark tones live, including the wall's own tint; it
+  also measures an LED color matrix that you accept or reject in an A/B comparison by eye. Finally the phone becomes a
+  remote to fine-tune white and dark tones by eye (cameras don't see narrow-band LEDs like your eyes do).
+  Live camera needs HTTPS: RambiBox creates a name-constrained local root certificate (private IPs and `.local` only,
+  key DPAPI-protected in `%AppData%\RambiBox\phone-ca`); the phone installs it once (the page walks you through it).
+  Without that setup the phone records a ~25 s video instead. Phone and PC must be on the same network; allow
+  RambiBox in the Windows Firewall (button on the Calibration page, private networks only).
 - LEDs go off when the display turns off, the PC sleeps or shuts down (and optionally when locked).
 - Start with Windows, light/dark theme, per-monitor DPI.
 

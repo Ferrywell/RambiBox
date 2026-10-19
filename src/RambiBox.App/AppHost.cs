@@ -2,6 +2,7 @@ using System.Windows.Threading;
 using RambiBox.App.Dev;
 using RambiBox.App.Services;
 using RambiBox.Core;
+using RambiBox.Core.Calibration;
 using RambiBox.Core.Capture;
 using RambiBox.Core.Config;
 using RambiBox.Core.Devices;
@@ -9,8 +10,21 @@ using RambiBox.Core.Engine;
 
 namespace RambiBox.App;
 
-/// <summary>White balance and per-channel gamma at one moment (to undo a calibration).</summary>
-public sealed record CalibrationSnapshot((double R, double G, double B) WhiteBalance, (double R, double G, double B) ChannelGamma);
+/// <summary>White balance, per-channel gamma and LED color matrix at one moment (to undo a calibration).</summary>
+public sealed record CalibrationSnapshot((double R, double G, double B) WhiteBalance, (double R, double G, double B) ChannelGamma,
+    double[]? ColorMatrix = null)
+{
+    /// <summary>Value equality including the matrix contents.</summary>
+    public bool SameValues(CalibrationSnapshot o)
+    {
+        static bool Near((double R, double G, double B) a, (double R, double G, double B) b) =>
+            Math.Abs(a.R - b.R) < 1e-9 && Math.Abs(a.G - b.G) < 1e-9 && Math.Abs(a.B - b.B) < 1e-9;
+        if (!Near(WhiteBalance, o.WhiteBalance) || !Near(ChannelGamma, o.ChannelGamma)) return false;
+        if (ColorMatrix is null || o.ColorMatrix is null) return ColorMatrix is null && o.ColorMatrix is null;
+        for (int i = 0; i < 9; i++) if (Math.Abs(ColorMatrix[i] - o.ColorMatrix[i]) > 1e-9) return false;
+        return true;
+    }
+}
 
 /// <summary>Command line options.</summary>
 public sealed record AppOptions(bool Tray, bool Simulate, string? Theme, string? Page, bool Exit = false)
@@ -58,7 +72,7 @@ public sealed class AppHost : IDisposable
     public string? ImportSummary { get; set; }
     public bool FirstRun { get; }
 
-    /// <summary>White balance + channel gamma from before the last calibration (for "Restore previous white balance").</summary>
+    /// <summary>White balance + channel gamma + color matrix from before the last calibration (for "Restore previous").</summary>
     public CalibrationSnapshot? PreviousCalibration { get; set; }
 
     public UiOverride ActiveOverride { get; private set; }
@@ -240,16 +254,57 @@ public sealed class AppHost : IDisposable
         });
     }
 
+    /// <summary>Called by the calibration (any thread): apply + persist the LED color matrix (null = off).</summary>
+    public void ApplyColorMatrix(double[]? matrix)
+    {
+        var m = matrix is null ? null : (double[])matrix.Clone();
+        _dispatcher.BeginInvoke(() =>
+        {
+            Settings.Color.ColorMatrix = m;
+            Commit(this);
+        });
+    }
+
+    /// <summary>Applies a whole calibration snapshot (restore previous / cancel). Any thread.</summary>
+    public void ApplyCalibration(CalibrationSnapshot s)
+    {
+        ApplyWhiteBalance(s.WhiteBalance.R, s.WhiteBalance.G, s.WhiteBalance.B);
+        ApplyChannelGamma(s.ChannelGamma.R, s.ChannelGamma.G, s.ChannelGamma.B);
+        ApplyColorMatrix(s.ColorMatrix);
+    }
+
     /// <summary>Thread-safe snapshot of the per-channel gamma in effect.</summary>
     public (double R, double G, double B) CurrentChannelGamma
     {
         get { lock (_wbLock) return _gamma; }
     }
     private (double R, double G, double B) _gamma = (1, 1, 1);
+    private double[]? _matrix;
+    private double _brightness = 1;
 
     public CalibrationSnapshot CurrentCalibration
     {
-        get { lock (_wbLock) return new CalibrationSnapshot(_wb, _gamma); }
+        get { lock (_wbLock) return new CalibrationSnapshot(_wb, _gamma, _matrix is null ? null : (double[])_matrix.Clone()); }
+    }
+
+    /// <summary>The phone calibration's view of the settings (thread-safe; applies through the UI thread).</summary>
+    public ICalibrationTarget CalibrationTarget => _calibrationTarget ??= new HostCalibrationTarget(this);
+    private ICalibrationTarget? _calibrationTarget;
+
+    /// <summary>The PC's local certificate authority for the phone's HTTPS calibration page.</summary>
+    public LocalCertificateAuthority PhoneCa { get; } = new();
+
+    private sealed class HostCalibrationTarget(AppHost host) : ICalibrationTarget
+    {
+        public CalibrationValues Read()
+        {
+            lock (host._wbLock)
+                return new CalibrationValues(host._wb, host._gamma, host._matrix is null ? null : (double[])host._matrix.Clone(), host._brightness);
+        }
+
+        public void ApplyWhiteBalance(double r, double g, double b) => host.ApplyWhiteBalance(r, g, b);
+        public void ApplyChannelGamma(double r, double g, double b) => host.ApplyChannelGamma(r, g, b);
+        public void ApplyColorMatrix(double[]? matrix) => host.ApplyColorMatrix(matrix);
     }
 
     /// <summary>Thread-safe snapshot of the white balance in effect (updated on every commit).</summary>
@@ -266,6 +321,8 @@ public sealed class AppHost : IDisposable
         {
             _wb = (Settings.Color.WhiteR, Settings.Color.WhiteG, Settings.Color.WhiteB);
             _gamma = (Settings.Color.ChannelGammaR, Settings.Color.ChannelGammaG, Settings.Color.ChannelGammaB);
+            _matrix = Settings.Color.ColorMatrix is { } m ? (double[])m.Clone() : null;
+            _brightness = Settings.Color.Brightness;
         }
     }
 

@@ -162,8 +162,13 @@ internal static class CalibrationAnalyzer
             "Could not measure the glow on at least 2 sides — make sure the light on the wall around the screen is visible and not blocked.");
     }
 
-    /// <summary>Samples photo pixels whose screen-plane coordinates fall inside <paramref name="rect"/>.</summary>
-    internal static RegionMeasurement SampleRegion(RgbImage img, Homography H, Homography inv, RectD rect, Side side, bool glow)
+    /// <summary>
+    /// Samples photo pixels whose screen-plane coordinates fall inside <paramref name="rect"/>.
+    /// With <paramref name="includeDark"/> nearly black pixels count towards the mean too (and a mean is returned even
+    /// when the status is TooDark): needed to measure the wall with the LEDs off.
+    /// </summary>
+    internal static RegionMeasurement SampleRegion(RgbImage img, Homography H, Homography inv, RectD rect, Side side, bool glow,
+        bool includeDark = false)
     {
         var poly = rect.Corners();
         var ppoly = new PointD[4];
@@ -196,7 +201,11 @@ internal static class CalibrationAnalyzer
                 int o = (y * img.Width + x) * 3;
                 byte r = data[o], g = data[o + 1], b = data[o + 2];
                 if (r >= ClipLevel || g >= ClipLevel || b >= ClipLevel) { clipped++; continue; }
-                if (Math.Max(r, Math.Max(g, b)) < DarkLevel) { dark++; continue; }
+                if (Math.Max(r, Math.Max(g, b)) < DarkLevel)
+                {
+                    dark++;
+                    if (!includeDark) continue;
+                }
                 double lr = SrgbToLinear[r], lg = SrgbToLinear[g], lb = SrgbToLinear[b];
                 samples.Add((0.2126 * lr + 0.7152 * lg + 0.0722 * lb, lr, lg, lb));
             }
@@ -206,10 +215,12 @@ internal static class CalibrationAnalyzer
         double clipFrac = inside == 0 ? 0 : (double)clipped / inside;
         if (inFrame < 0.5 || inside < 20)
             return new RegionMeasurement(side, glow, ppoly, RegionStatus.OutOfFrame, default, inside, clipFrac, inFrame);
-        if (samples.Count < Math.Max(20, inside * 0.3))
+        int bright = includeDark ? samples.Count - dark : samples.Count;
+        if (bright < Math.Max(20, inside * 0.3))
         {
             var st = clipFrac > 0.15 ? RegionStatus.Clipped : RegionStatus.TooDark;
-            return new RegionMeasurement(side, glow, ppoly, st, default, samples.Count, clipFrac, inFrame);
+            var darkMean = includeDark && st == RegionStatus.TooDark && samples.Count >= 20 ? TrimmedMean(samples) : default;
+            return new RegionMeasurement(side, glow, ppoly, st, darkMean, samples.Count, clipFrac, inFrame);
         }
         var mean = TrimmedMean(samples);
         return new RegionMeasurement(side, glow, ppoly, RegionStatus.Ok, mean, samples.Count, clipFrac, inFrame);
