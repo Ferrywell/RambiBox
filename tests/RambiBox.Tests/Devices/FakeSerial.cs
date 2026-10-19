@@ -24,6 +24,8 @@ internal sealed class FakeDevice
     public int FailAtWrite = -1;
     /// <summary>Per-write blocking time (simulates a driver that blocks until data is on the wire).</summary>
     public int WriteBlockMs { get; set; }
+    /// <summary>Firmware answer to a write (e.g. the AWA hello); null = no answer. Receives the written bytes and the baud rate.</summary>
+    public Func<byte[], int, byte[]?>? Reply { get; set; }
 
     public int OpenCount;
     public int WriteCount;
@@ -143,13 +145,26 @@ internal sealed class FakeLink : ISerialLink
         long ts = Stopwatch.GetTimestamp();
         var copy = data.ToArray();
         lock (_lock) _writes.Add((ts, copy));
+        if (_dev.Reply?.Invoke(copy, Baud) is { Length: > 0 } answer)
+            lock (_lock) _replies.Enqueue(answer);
         if (_dev.WriteBlockMs > 0) Thread.Sleep(_dev.WriteBlockMs);
     }
+
+    private readonly Queue<byte[]> _replies = new();
 
     public int Read(Span<byte> buffer, int timeoutMs)
     {
         ObjectDisposedException.ThrowIf(Disposed, this);
         if (Unplugged) throw new IOException("device removed");
+        lock (_lock)
+        {
+            if (_replies.TryDequeue(out var answer))
+            {
+                int k = Math.Min(buffer.Length, answer.Length);
+                answer.AsSpan(0, k).CopyTo(buffer);
+                return k;
+            }
+        }
         if (!_dev.Greets || _greetingSent)
         {
             Thread.Sleep(timeoutMs);
