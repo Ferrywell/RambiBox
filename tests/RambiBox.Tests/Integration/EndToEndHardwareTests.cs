@@ -8,6 +8,7 @@ using Xunit.Abstractions;
 namespace RambiBox.Tests.Integration;
 
 /// <summary>Full pipeline on the real monitor + LED controller. Run alone: dotnet test --filter Category=Hardware</summary>
+[Collection("Hardware")]
 public class EndToEndHardwareTests(ITestOutputHelper output)
 {
     [Fact]

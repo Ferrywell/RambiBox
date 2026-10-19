@@ -12,6 +12,7 @@ namespace RambiBox.Tests.Capture;
 /// (forces new desktop frames). Doubles as the benchmark (prints Sample() timings, fps, allocations, memory).
 /// </summary>
 [Trait("Category", "Hardware")]
+[Collection("Hardware")]
 public class DxgiScreenSamplerHardwareTests(ITestOutputHelper output)
 {
     [Fact]
