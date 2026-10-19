@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>RambiBox.App</RootNamespace>
+    <AssemblyName>RambiBox</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- WPF Fluent theme (ThemeMode) is marked experimental in .NET 9/10 -->
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RambiBox.Core\RambiBox.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="H.NotifyIcon.Wpf" Version="2.4.1" />
+  </ItemGroup>
+
+</Project>

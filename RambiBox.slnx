@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RambiBox.App/RambiBox.App.csproj" />
+    <Project Path="src/RambiBox.Core/RambiBox.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RambiBox.Tests/RambiBox.Tests.csproj" />
+  </Folder>
+</Solution>
