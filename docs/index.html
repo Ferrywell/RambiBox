@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RambiBox — Ambilight for Windows with Adalight LED strips</title>
+  <meta name="description" content="RambiBox turns an Adalight LED strip behind your monitor or TV into ambient light that follows the picture. A fast, modern, open-source successor to AmbiBox for Windows 10 and 11.">
+  <meta name="theme-color" content="#08090e" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f6f7fb" media="(prefers-color-scheme: light)">
+  <link rel="canonical" href="https://OWNER.github.io/RambiBox/">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" href="assets/icon-256.png" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="RambiBox">
+  <meta property="og:title" content="RambiBox — Ambilight for Windows">
+  <meta property="og:description" content="Ambient light for Adalight LED strips on Windows 10/11: ~1 % CPU, ~32 fps, HDR, black-bar detection and phone color calibration. Free and open source.">
+  <meta property="og:url" content="https://OWNER.github.io/RambiBox/">
+  <meta property="og:image" content="https://OWNER.github.io/RambiBox/assets/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="RambiBox: the app window with a live preview, surrounded by colorful ambient light">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="RambiBox — Ambilight for Windows">
+  <meta name="twitter:description" content="A fast, modern, open-source successor to AmbiBox for Adalight LED strips.">
+  <meta name="twitter:image" content="https://OWNER.github.io/RambiBox/assets/og-image.png">
+
+  <script>
+    // apply a saved theme before first paint (no flash); storage may be unavailable
+    (function () {
+      var t = (location.search.match(/[?&]theme=(light|dark)/) || [])[1];
+      try { t = t || localStorage.getItem("rambibox-theme"); } catch (e) {}
+      if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+    })();
+  </script>
+  <link rel="stylesheet" href="style.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "RambiBox",
+    "operatingSystem": "Windows 10, Windows 11",
+    "applicationCategory": "UtilitiesApplication",
+    "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+    "downloadUrl": "https://github.com/OWNER/RambiBox/releases/latest",
+    "url": "https://OWNER.github.io/RambiBox/"
+  }
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <!-- shared icon symbols -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="i-download" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 5-5m-5 5-5-5M4 19h16"/></symbol>
+      <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.08.63-1.33-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.26-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.39.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></g></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M12 3 5 6v5.5c0 4.4 3 8 7 9.5 4-1.5 7-5.1 7-9.5V6l-7-3Z"/></symbol>
+      <symbol id="i-phone" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></g></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V4.5h6V7m-8 0 1 13h8l1-13"/></symbol>
+    </defs>
+  </svg>
+
+  <header class="site-header">
+    <nav class="nav container" aria-label="Main">
+      <a class="brand" href="#top" aria-label="RambiBox home">
+        <img src="assets/icon-256.png" alt="" width="28" height="28">
+        <span>RambiBox</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#screenshots">Screenshots</a></li>
+        <li><a href="#calibration">Calibration</a></li>
+        <li><a href="#install">Install</a></li>
+        <li><a href="#faq">FAQ</a></li>
+      </ul>
+      <div class="nav-actions">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch between light and dark theme">
+          <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>
+          <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></g></svg>
+        </button>
+        <a class="icon-btn" href="https://github.com/OWNER/RambiBox" aria-label="RambiBox on GitHub"><svg aria-hidden="true"><use href="#i-github"/></svg></a>
+        <a class="btn btn-primary btn-sm" href="https://github.com/OWNER/RambiBox/releases/latest">Download</a>
+      </div>
+    </nav>
+  </header>
+
+  <main id="main">
+    <!-- ============================================================ hero -->
+    <section class="hero" id="top" aria-labelledby="hero-title">
+      <div class="container">
+        <div class="hero-copy">
+          <p class="badge"><span class="dot" aria-hidden="true"></span>Free &amp; open source · Windows 10 &amp; 11</p>
+          <h1 id="hero-title">Your screen, <span class="gradient-text">beyond its edges.</span></h1>
+          <p class="lead">RambiBox turns an Adalight LED strip behind your monitor or TV into ambient light that follows the picture — a fast, modern successor to AmbiBox that sips about 1&nbsp;% of one CPU core.</p>
+          <div class="hero-cta">
+            <a class="btn btn-primary btn-lg" href="https://github.com/OWNER/RambiBox/releases/latest">
+              <svg aria-hidden="true"><use href="#i-download"/></svg>
+              <span class="btn-label">Download for Windows<small>Single .exe · no .NET install needed</small></span>
+            </a>
+            <a class="btn btn-secondary btn-lg" href="https://github.com/OWNER/RambiBox">
+              <svg aria-hidden="true"><use href="#i-github"/></svg>
+              View on GitHub
+            </a>
+          </div>
+          <p class="hero-meta">
+            <span><svg aria-hidden="true"><use href="#i-check"/></svg>Imports your AmbiBox settings</span>
+            <span><svg aria-hidden="true"><use href="#i-check"/></svg>Finds the LED controller by itself</span>
+            <span><svg aria-hidden="true"><use href="#i-check"/></svg>GPL-3.0</span>
+          </p>
+        </div>
+
+        <div class="showcase" role="img" aria-label="Illustration: a monitor whose colors spill onto the wall behind it as ambient light, with LED dots around its edges">
+          <div class="wall-glow scene"></div>
+          <div class="led-strip scene"></div>
+          <div class="monitor">
+            <div class="screen scene">
+              <svg viewBox="0 0 160 90" preserveAspectRatio="none" aria-hidden="true">
+                <defs>
+                  <radialGradient id="sun" cx="0.5" cy="0.5" r="0.5">
+                    <stop offset="0" stop-color="#fff" stop-opacity="0.95"/>
+                    <stop offset="0.35" stop-color="#fff4d6" stop-opacity="0.75"/>
+                    <stop offset="1" stop-color="#fff4d6" stop-opacity="0"/>
+                  </radialGradient>
+                  <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#05060f" stop-opacity="0.05"/>
+                    <stop offset="1" stop-color="#05060f" stop-opacity="0.55"/>
+                  </linearGradient>
+                </defs>
+                <circle cx="104" cy="50" r="22" fill="url(#sun)"/>
+                <path d="M0 52 C 14 44, 22 40, 34 45 S 52 36, 66 44 S 84 47, 96 50 S 130 43, 160 49 V 56 H 0 Z" fill="#0b0716" fill-opacity="0.45"/>
+                <path d="M0 56 C 10 49, 18 47, 28 51 S 44 48, 54 54 L 160 56 V 90 H 0 Z" fill="#0b0716" fill-opacity="0.55"/>
+                <rect x="0" y="56" width="160" height="34" fill="url(#sea)"/>
+                <g stroke="#fff4d6" stroke-opacity="0.55" stroke-width="0.6" stroke-linecap="round">
+                  <path d="M99 60h10M97 64h14M95 69h18M93 75h22M90 82h28" stroke-dasharray="3 2"/>
+                </g>
+              </svg>
+            </div>
+          </div>
+          <div class="stand"></div>
+        </div>
+
+        <dl class="stats">
+          <div class="stat"><dt class="visually-hidden">CPU use</dt><dd style="margin:0"><b>~1 %</b><span>of one CPU core</span></dd></div>
+          <div class="stat"><dt class="visually-hidden">Frame rate</dt><dd style="margin:0"><b>~32 fps</b><span>112 LEDs at 115200 baud</span></dd></div>
+          <div class="stat"><dt class="visually-hidden">Capture time</dt><dd style="margin:0"><b>1.2 ms</b><span>screen capture per frame</span></dd></div>
+          <div class="stat"><dt class="visually-hidden">Detection time</dt><dd style="margin:0"><b>~65 ms</b><span>to find your controller</span></dd></div>
+          <div class="stat"><dt class="visually-hidden">Memory</dt><dd style="margin:0"><b>~22 MB</b><span>RAM idling in the tray</span></dd></div>
+        </dl>
+        <p class="stats-note">Measured on an RTX 3060 Ti with a CH340 Arduino Nano. With 112 LEDs, the 115200-baud serial link is the limit, not the PC.</p>
+      </div>
+    </section>
+
+    <!-- ============================================================ features -->
+    <section id="features" aria-labelledby="features-title">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Features</p>
+          <h2 id="features-title">Everything AmbiBox did — rebuilt for today's Windows.</h2>
+          <p>Lightweight, quick and quiet. RambiBox lives in the notification area and only asks for attention when something needs you.</p>
+        </div>
+        <div class="features">
+          <article class="card feature">
+            <div class="feature-icon" style="--c:#2bb673"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2.5V6M15 2.5V6M9 18v3.5M15 18v3.5M2.5 9H6M2.5 15H6M18 9h3.5M18 15h3.5"/></g></svg></div>
+            <h3>Efficient</h3>
+            <p>DXGI desktop duplication with GPU downscaling: about 1&nbsp;% of one core and ~22&nbsp;MB of RAM. Nothing runs while the window is closed.</p>
+          </article>
+          <article class="card feature">
+            <div class="feature-icon" style="--c:#e8590c"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M13 2.5 4.5 13.5H11L10 21.5l8.5-11H12l1-8Z"/></svg></div>
+            <h3>Low latency</h3>
+            <p>Frames go out as fast as the serial link allows, paced by wire time so nothing queues up. Capture to LED is a few milliseconds plus the wire.</p>
+          </article>
+          <article class="card feature">
+            <div class="feature-icon" style="--c:#3d6bff"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6v5H9zM7 8h10v5a5 5 0 0 1-10 0V8ZM12 18v3.5"/></g></svg></div>
+            <h3>Finds your strip</h3>
+            <p>Auto-detects the Adalight controller in ~65&nbsp;ms and reconnects when you plug it into another USB port. Bluetooth and modem ports are never touched.</p>
+          </article>
+          <article class="card feature">
+            <div class="feature-icon" style="--c:#8f4dff"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4.5" width="19" height="15" rx="2"/><path d="M2.5 8.5h19M2.5 15.5h19"/></g></svg></div>
+            <h3>HDR &amp; black bars</h3>
+            <p>HDR desktops are tone-mapped so colors look like the SDR picture. Letterbox and pillarbox bars are detected and skipped.</p>
+          </article>
+          <article class="card feature">
+            <div class="feature-icon" style="--c:#d6336c"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21.5h4M12 2.5a6.5 6.5 0 0 0-4 11.6c.6.5 1 1.2 1 2V16h6v-.9c0-.8.4-1.5 1-2A6.5 6.5 0 0 0 12 2.5Z"/></g></svg></div>
+            <h3>Static &amp; mood light</h3>
+            <p>A fixed color for the room, or slow effects: color cycle, rainbow and breathing. One master switch and brightness in the tray menu.</p>
+          </article>
+          <article class="card feature">
+            <div class="feature-icon" style="--c:#0ca5b8"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><circle cx="12" cy="11" r="3"/><path d="M10.5 18.5h3"/></g></svg></div>
+            <h3>Phone calibration</h3>
+            <p>Point your phone at the screen: white balance, dark tones and an LED color matrix are measured live — then you fine-tune by eye.</p>
+          </article>
+          <article class="card feature">
+            <div class="feature-icon" style="--c:#c28a00"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h11m0 0-4-4m4 4-4 4M14 4.5h4.5a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H14"/></g></svg></div>
+            <h3>AmbiBox import</h3>
+            <p>Your LED layout, white balance, saturation, smoothing, static color and port come over on the first start. AmbiBox can be closed and removed from startup — reversibly.</p>
+          </article>
+          <article class="card feature">
+            <div class="feature-icon" style="--c:#1f7ae0"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></g></svg></div>
+            <h3>Native Windows 11 look</h3>
+            <p>WPF Fluent design with light and dark mode, your accent color and per-monitor DPI. LEDs go off when the display sleeps, the PC sleeps or shuts down.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ how it works -->
+    <section id="how" aria-labelledby="how-title">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">How it works</p>
+          <h2 id="how-title">From pixels to light in three steps.</h2>
+          <p>Every frame takes the same short path. The heavy lifting happens on the GPU; the CPU only touches a tiny image.</p>
+        </div>
+
+        <div class="card pipeline-wrap">
+          <svg class="pipeline pipeline-wide" viewBox="0 0 960 230" role="img" aria-labelledby="pipe-title pipe-desc">
+            <title id="pipe-title">RambiBox pipeline</title>
+            <desc id="pipe-desc">The screen is captured with DXGI desktop duplication and downscaled on the GPU, the light engine turns edge colors into LED colors, and the Adalight device sends them over USB serial to the LED strip.</desc>
+            <defs>
+              <linearGradient id="flowGradient" x1="0" x2="1">
+                <stop offset="0" stop-color="#ff4f9a"/><stop offset="0.5" stop-color="#ffd03a"/><stop offset="1" stop-color="#14d8f0"/>
+              </linearGradient>
+              <linearGradient id="screenGrad" x1="0" x2="1">
+                <stop offset="0" stop-color="#5a2ca0"/><stop offset="0.5" stop-color="#ff6a3d"/><stop offset="1" stop-color="#1b7fc4"/>
+              </linearGradient>
+            </defs>
+            <!-- node 1: capture -->
+            <rect class="node" x="10" y="20" width="270" height="190" rx="18"/>
+            <rect x="40" y="46" width="78" height="46" rx="5" fill="url(#screenGrad)"/>
+            <rect x="72" y="92" width="14" height="8" fill="#5b6070"/>
+            <path d="M128 69h24" stroke="#7d8496" stroke-width="2"/>
+            <rect x="160" y="56" width="26" height="26" rx="3" fill="url(#screenGrad)" opacity="0.9"/>
+            <text x="40" y="136" font-size="19" font-weight="700">Capture</text>
+            <text class="sub" x="40" y="160">DXGI desktop duplication</text>
+            <text class="sub" x="40" y="178">GPU downscale · HDR tone-map</text>
+            <text class="sub" x="40" y="196">black-bar detection</text>
+            <!-- arrow -->
+            <path class="flow" d="M286 115h56" stroke-width="4" fill="none"/>
+            <path class="arrow-head" d="M342 107l12 8-12 8z"/>
+            <!-- node 2: engine -->
+            <rect class="node" x="360" y="20" width="250" height="190" rx="18"/>
+            <g transform="translate(390 46)">
+              <circle cx="22" cy="22" r="20" fill="none" stroke="url(#flowGradient)" stroke-width="5"/>
+              <path d="M58 10h60M58 22h44M58 34h52" stroke="#7d8496" stroke-width="4" stroke-linecap="round"/>
+            </g>
+            <text x="390" y="136" font-size="19" font-weight="700">Light engine</text>
+            <text class="sub" x="390" y="160">zone averages · smoothing</text>
+            <text class="sub" x="390" y="178">white balance · gamma</text>
+            <text class="sub" x="390" y="196">LED color matrix</text>
+            <!-- arrow -->
+            <path class="flow" d="M616 115h56" stroke-width="4" fill="none"/>
+            <path class="arrow-head" d="M672 107l12 8-12 8z"/>
+            <!-- node 3: LEDs -->
+            <rect class="node" x="690" y="20" width="260" height="190" rx="18"/>
+            <g transform="translate(720 52)">
+              <rect x="0" y="12" width="42" height="24" rx="4" fill="#1d6fd8"/>
+              <path d="M42 24h20" stroke="#7d8496" stroke-width="3"/>
+              <circle cx="72" cy="24" r="6" fill="#ff4f9a"/><circle cx="90" cy="24" r="6" fill="#ff7a3d"/><circle cx="108" cy="24" r="6" fill="#ffd03a"/>
+              <circle cx="126" cy="24" r="6" fill="#3ce88c"/><circle cx="144" cy="24" r="6" fill="#14d8f0"/><circle cx="162" cy="24" r="6" fill="#b05cff"/>
+            </g>
+            <text x="720" y="136" font-size="19" font-weight="700">LED strip</text>
+            <text class="sub" x="720" y="160">Adalight over USB serial</text>
+            <text class="sub" x="720" y="178">paced by wire time</text>
+            <text class="sub" x="720" y="196">Arduino + WS281x</text>
+          </svg>
+
+          <svg class="pipeline pipeline-tall" viewBox="0 0 320 560" role="img" aria-labelledby="pipe2-title">
+            <title id="pipe2-title">RambiBox pipeline: capture, light engine, LED strip</title>
+            <rect class="node" x="10" y="10" width="300" height="140" rx="18"/>
+            <text x="34" y="52" font-size="20" font-weight="700">1 · Capture</text>
+            <text class="sub" x="34" y="80">DXGI desktop duplication</text>
+            <text class="sub" x="34" y="100">GPU downscale · HDR tone-map</text>
+            <text class="sub" x="34" y="120">black-bar detection</text>
+            <path class="flow" d="M160 156v40" stroke-width="4" fill="none"/>
+            <path class="arrow-head" d="M152 196l8 12 8-12z"/>
+            <rect class="node" x="10" y="212" width="300" height="140" rx="18"/>
+            <text x="34" y="254" font-size="20" font-weight="700">2 · Light engine</text>
+            <text class="sub" x="34" y="282">zone averages · smoothing</text>
+            <text class="sub" x="34" y="302">white balance · gamma</text>
+            <text class="sub" x="34" y="322">LED color matrix</text>
+            <path class="flow" d="M160 358v40" stroke-width="4" fill="none"/>
+            <path class="arrow-head" d="M152 398l8 12 8-12z"/>
+            <rect class="node" x="10" y="414" width="300" height="140" rx="18"/>
+            <text x="34" y="456" font-size="20" font-weight="700">3 · LED strip</text>
+            <text class="sub" x="34" y="484">Adalight over USB serial</text>
+            <text class="sub" x="34" y="504">paced by wire time</text>
+            <text class="sub" x="34" y="524">Arduino + WS281x</text>
+          </svg>
+        </div>
+
+        <div class="how-details">
+          <div class="card">
+            <h3><span class="step-num">1</span>Capture</h3>
+            <p>Windows hands over each new desktop frame as a GPU texture. RambiBox shrinks it on the GPU and copies back only a thumbnail — about 1.2&nbsp;ms per frame. HDR frames are tone-mapped to your SDR brightness.</p>
+          </div>
+          <div class="card">
+            <h3><span class="step-num">2</span>Engine</h3>
+            <p>Each LED gets the exact average of its zone at the screen edge. Smoothing, saturation, gamma, white balance and the calibrated color matrix are applied.</p>
+          </div>
+          <div class="card">
+            <h3><span class="step-num">3</span>LEDs</h3>
+            <p>Frames use the standard Adalight protocol. They are paced to the speed of the serial link, so the newest colors always win and nothing lags behind.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ screenshots -->
+    <section id="screenshots" aria-labelledby="shots-title">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Screenshots</p>
+          <h2 id="shots-title">Clean, calm and right at home on Windows&nbsp;11.</h2>
+          <p>The window only exists while it is open. Close it and RambiBox idles in the tray. (Screenshots taken with the built-in <code>--demo</code> mode.)</p>
+        </div>
+        <div class="shots">
+          <figure class="shot large">
+            <a href="assets/app-home-dark.png" data-lightbox aria-label="Enlarge: Home page with live preview">
+              <div class="window-frame"><img src="assets/app-home-dark.png" width="1126" height="793" alt="RambiBox Home page in dark mode: connected on COM3 at 31 fps, a live preview of a sunset scene with glowing LED dots around it, and the mode cards for screen ambilight, static color and mood light."></div>
+            </a>
+            <figcaption><b>Home</b> — live preview of the screen and the LEDs, mode and brightness.</figcaption>
+          </figure>
+          <figure class="shot">
+            <a href="assets/app-layout-dark.png" data-lightbox aria-label="Enlarge: LED layout page">
+              <div class="window-frame"><img src="assets/app-layout-dark.png" width="1126" height="793" loading="lazy" alt="LED layout page: numbered LEDs around the screen with their capture zones and the start corner, plus LEDs per side."></div>
+            </a>
+            <figcaption><b>LED layout</b> — zones, numbering and an Identify test.</figcaption>
+          </figure>
+          <figure class="shot">
+            <a href="assets/app-colors-dark.png" data-lightbox aria-label="Enlarge: Colors page">
+              <div class="window-frame"><img src="assets/app-colors-dark.png" width="1126" height="793" loading="lazy" alt="Colors page with sliders for brightness, saturation, gamma, hue shift, smoothing, dark threshold and minimum brightness."></div>
+            </a>
+            <figcaption><b>Colors</b> — every adjustment applies instantly.</figcaption>
+          </figure>
+          <figure class="shot">
+            <a href="assets/app-device-dark.png" data-lightbox aria-label="Enlarge: Device page">
+              <div class="window-frame"><img src="assets/app-device-dark.png" width="1126" height="793" loading="lazy" alt="Device page: connected to a USB-SERIAL CH340 on COM3, link limit 34 fps, sending 30 fps, screen capture 1.2 ms, with port, baud rate and color order settings."></div>
+            </a>
+            <figcaption><b>Device</b> — link speed, frame rates and the connection.</figcaption>
+          </figure>
+          <figure class="shot">
+            <a href="assets/app-calibration-dark.png" data-lightbox aria-label="Enlarge: Calibration page">
+              <div class="window-frame"><img src="assets/app-calibration-dark.png" width="1126" height="793" loading="lazy" alt="Color calibration page with the three steps — camera color loop, fine-tune by eye, colors A/B — and the resulting white balance."></div>
+            </a>
+            <figcaption><b>Calibration</b> — phone-assisted, finished by eye.</figcaption>
+          </figure>
+          <figure class="shot">
+            <a href="assets/app-home-light.png" data-lightbox aria-label="Enlarge: Home page in light mode">
+              <div class="window-frame"><img src="assets/app-home-light.png" width="1126" height="793" loading="lazy" alt="RambiBox Home page in light mode with the live preview."></div>
+            </a>
+            <figcaption><b>Light mode</b> — follows your Windows theme.</figcaption>
+          </figure>
+        </div>
+
+        <h3 class="visually-hidden">On the phone</h3>
+        <div class="phone-strip" role="list" aria-label="Phone calibration screenshots">
+          <figure class="phone" role="listitem">
+            <a href="assets/phone-landing.png" data-lightbox aria-label="Enlarge: phone start page">
+              <div class="phone-frame"><div class="phone-screen"><span class="fallback"><svg aria-hidden="true"><use href="#i-phone"/></svg>Start page</span><img class="phone-img" src="assets/phone-landing.png" width="390" height="844" loading="lazy" alt="Phone: RambiBox calibration start page after scanning the QR code."></div></div>
+            </a>
+            <figcaption>Scan the QR code</figcaption>
+          </figure>
+          <figure class="phone" role="listitem">
+            <a href="assets/phone-setup.png" data-lightbox aria-label="Enlarge: one-time phone setup">
+              <div class="phone-frame"><div class="phone-screen"><span class="fallback"><svg aria-hidden="true"><use href="#i-shield"/></svg>One-time setup</span><img class="phone-img" src="assets/phone-setup.png" width="390" height="844" loading="lazy" alt="Phone: one-time setup that installs RambiBox's local certificate for the live camera."></div></div>
+            </a>
+            <figcaption>One-time setup</figcaption>
+          </figure>
+          <figure class="phone" role="listitem">
+            <a href="assets/phone-live-portrait.png" data-lightbox aria-label="Enlarge: live camera color loop">
+              <div class="phone-frame"><div class="phone-screen"><span class="fallback"><svg aria-hidden="true"><use href="#i-phone"/></svg>Live color loop</span><img class="phone-img" src="assets/phone-live-portrait.png" width="390" height="844" loading="lazy" alt="Phone: live camera view of the screen and LEDs during the color loop."></div></div>
+            </a>
+            <figcaption>Live color loop</figcaption>
+          </figure>
+          <figure class="phone landscape" role="listitem">
+            <a href="assets/phone-live-landscape.png" data-lightbox aria-label="Enlarge: live camera in landscape">
+              <div class="phone-frame"><div class="phone-screen"><span class="fallback"><svg aria-hidden="true"><use href="#i-phone"/></svg>Landscape works too</span><img class="phone-img" src="assets/phone-live-landscape.png" width="844" height="390" loading="lazy" alt="Phone held sideways: live camera calibration in landscape orientation."></div></div>
+            </a>
+            <figcaption>Any orientation</figcaption>
+          </figure>
+          <figure class="phone" role="listitem">
+            <a href="assets/phone-eye.png" data-lightbox aria-label="Enlarge: fine-tune by eye">
+              <div class="phone-frame"><div class="phone-screen"><span class="fallback"><svg aria-hidden="true"><use href="#i-phone"/></svg>Fine-tune by eye</span><img class="phone-img" src="assets/phone-eye.png" width="390" height="844" loading="lazy" alt="Phone: remote control to nudge white and dark tones by eye."></div></div>
+            </a>
+            <figcaption>Fine-tune by eye</figcaption>
+          </figure>
+          <figure class="phone" role="listitem">
+            <a href="assets/phone-ab.png" data-lightbox aria-label="Enlarge: colors A/B">
+              <div class="phone-frame"><div class="phone-screen"><span class="fallback"><svg aria-hidden="true"><use href="#i-phone"/></svg>Colors A/B</span><img class="phone-img" src="assets/phone-ab.png" width="390" height="844" loading="lazy" alt="Phone: A/B comparison of saturated colors with and without the measured color correction."></div></div>
+            </a>
+            <figcaption>Colors A/B</figcaption>
+          </figure>
+          <figure class="phone" role="listitem">
+            <a href="assets/phone-live-light.png" data-lightbox aria-label="Enlarge: phone page in light mode">
+              <div class="phone-frame"><div class="phone-screen"><span class="fallback"><svg aria-hidden="true"><use href="#i-phone"/></svg>Light mode</span><img class="phone-img" src="assets/phone-live-light.png" width="390" height="844" loading="lazy" alt="Phone: the calibration page in light mode."></div></div>
+            </a>
+            <figcaption>Light mode</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ calibration -->
+    <section id="calibration" aria-labelledby="calib-title">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Phone color calibration</p>
+          <h2 id="calib-title">Make the glow match the screen — with just your phone.</h2>
+          <p>LED strips are rarely neutral: white turns bluish, dark scenes drift green, the wall adds its own tint. RambiBox measures all of that with your phone's camera. No colorimeter, no app to install.</p>
+        </div>
+        <div class="calib-grid">
+          <ol class="steps">
+            <li>
+              <div>
+                <h3>Scan &amp; point</h3>
+                <p>Start the calibration on the <b>Calibration</b> page, scan the QR code and point the phone at the screen so it sees the screen and the glow on the wall.</p>
+              </div>
+            </li>
+            <li>
+              <div>
+                <h3>Camera color loop</h3>
+                <p>Screen and LEDs cycle through room light, white, dark grays and red, green and blue together — every frame tagged with a visual step code. White balance and the dark tones are corrected live, including the wall's own color. RambiBox also measures an LED color matrix.</p>
+              </div>
+            </li>
+            <li>
+              <div>
+                <h3>Your eye decides</h3>
+                <p>The phone becomes a remote: nudge white and dark tones until the glow matches the screen edge. Then compare saturated colors <b>A</b> (corrected) and <b>B</b> (uncorrected) — the correction is only kept if A looks closer to you.</p>
+              </div>
+            </li>
+          </ol>
+          <div class="card eye-card">
+            <svg class="big-icon" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3.2"/></g></svg>
+            <h3>Why the eye is the final judge</h3>
+            <p>Camera sensors and your eyes see color differently — especially the narrow-band light of RGB LEDs. A camera can say "neutral" while the wall looks a little pink to you. So the camera does the heavy lifting quickly and repeatably, and you make the last call.</p>
+            <p style="margin:0">Live camera needs a secure page. RambiBox creates its own <b>local certificate</b> that only works for your home network; the phone trusts it after a one-time setup. Without it, the phone simply records a ~25&nbsp;s video instead.</p>
+          </div>
+        </div>
+        <div class="callout">
+          <svg aria-hidden="true"><use href="#i-phone"/></svg>
+          <p><strong>iPhone, one-time step:</strong> after installing the RambiBox profile, open <span class="path">Settings → General → About → Certificate Trust Settings</span> and turn on <b>RambiBox Local CA</b>. Installing alone is not enough. On Android, install it as a CA certificate when the page asks. Phone and PC must be on the same Wi-Fi.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ install -->
+    <section id="install" aria-labelledby="install-title">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Install</p>
+          <h2 id="install-title">Up and running in a minute.</h2>
+          <p>One self-contained file of about 90&nbsp;MB. No installer, no .NET runtime, no admin rights.</p>
+        </div>
+        <div class="install-steps">
+          <div class="card">
+            <h3><span class="step-num">1</span> Download</h3>
+            <p>Get <code>RambiBox.exe</code> from the <a href="https://github.com/OWNER/RambiBox/releases/latest">latest release</a>. A <code>.sha256</code> checksum is attached.</p>
+          </div>
+          <div class="card">
+            <h3><span class="step-num">2</span> Run it</h3>
+            <p>Put it anywhere (e.g. <code>%LocalAppData%\Programs\RambiBox</code>) and start it. On first start it imports your AmbiBox settings and offers to close AmbiBox.</p>
+          </div>
+          <div class="card">
+            <h3><span class="step-num">3</span> It finds your strip</h3>
+            <p>The controller is detected automatically. Check the <b>LED layout</b> with <i>Identify LEDs</i>, turn on <b>Start with Windows</b> — done.</p>
+          </div>
+        </div>
+        <div class="install-notes">
+          <div class="callout warn">
+            <svg aria-hidden="true"><use href="#i-shield"/></svg>
+            <p><strong>SmartScreen:</strong> the exe is not code-signed, so Windows may say "Windows protected your PC". Click <b>More info → Run anyway</b>. You can verify the SHA-256 checksum or build it yourself.</p>
+          </div>
+          <div class="callout">
+            <svg aria-hidden="true"><use href="#i-info"/></svg>
+            <p><strong>Firewall:</strong> only the phone calibration talks to your network. Allow it once for <b>private networks</b> when Windows asks — or use <b>Allow…</b> on the Calibration page.</p>
+          </div>
+          <div class="callout">
+            <svg aria-hidden="true"><use href="#i-trash"/></svg>
+            <p><strong>Uninstall:</strong> turn off <b>Start with Windows</b>, choose <b>Exit</b> in the tray menu and delete the exe. Settings live in <code>%AppData%\RambiBox</code>, logs in <code>%LocalAppData%\RambiBox</code>.</p>
+          </div>
+        </div>
+        <div class="source-build">
+          <div>
+            <h3>From source</h3>
+            <p>With the <a href="https://dotnet.microsoft.com/download/dotnet/10.0">.NET 10 SDK</a> installed, <code>install.cmd</code> builds the single-file exe, copies it to <code>%LocalAppData%\Programs\RambiBox</code>, adds a Start menu shortcut and starts it.</p>
+          </div>
+          <pre><code>git clone https://github.com/OWNER/RambiBox
+cd RambiBox
+install.cmd</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ hardware -->
+    <section id="hardware" aria-labelledby="hw-title">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Hardware</p>
+          <h2 id="hw-title">Works with the strip you already have.</h2>
+          <p>If AmbiBox could drive it as an Adalight device, RambiBox can too.</p>
+        </div>
+        <div class="hw-grid">
+          <div class="card">
+            <h3>Controller</h3>
+            <ul>
+              <li><b>Arduino</b> Nano, Uno, Pro Micro, Leonardo and clones</li>
+              <li>USB-serial chips <b>CH340/CH341/CH9102</b>, <b>FTDI</b> FT232R/FT-X, <b>CP210x</b> and Arduino's own USB</li>
+              <li>Any Adalight-compatible sketch that greets with <code>Ada</code> (e.g. FastLED "LEDstream")</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>LEDs &amp; link</h3>
+            <ul>
+              <li><b>WS2812B</b>, WS2811, SK6812 and other strips your sketch supports</li>
+              <li><b>115200 baud</b> (default) — other rates selectable</li>
+              <li>Any LED count and start corner; RGB/GRB/… color order</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>PC</h3>
+            <ul>
+              <li><b>Windows 10</b> (2004 / build 19041) or <b>Windows 11</b>, 64-bit</li>
+              <li>Any GPU with desktop duplication (DXGI 1.2) — HDR supported</li>
+              <li>Multiple monitors: pick the one behind the strip</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ FAQ -->
+    <section id="faq" aria-labelledby="faq-title">
+      <div class="container">
+        <div class="section-head center">
+          <p class="eyebrow">FAQ</p>
+          <h2 id="faq-title">Questions &amp; troubleshooting</h2>
+        </div>
+        <div class="faq">
+          <details>
+            <summary>RambiBox says the COM port is busy.</summary>
+            <div class="answer"><p>Only one program can use the LED controller. Usually that is AmbiBox (or Prismatik, Arduino's serial monitor…). RambiBox detects a running AmbiBox and offers to close it and remove it from startup. The AmbiBox shortcut is kept as <code>%AppData%\RambiBox\AmbiBox.lnk.disabled</code>, so this is reversible.</p></div>
+          </details>
+          <details>
+            <summary>Do I need to keep AmbiBox installed?</summary>
+            <div class="answer"><p>No. It is only read once to import your settings (LED layout, white balance, saturation, smoothing, static color, port). You can re-import any time from <b>Settings</b> while it is still installed.</p></div>
+          </details>
+          <details>
+            <summary>Windows asks about the firewall. Is that safe?</summary>
+            <div class="answer"><p>Yes — allow <b>Private networks</b> only. The phone calibration runs a small web server on TCP ports 47800–47820 while the calibration is open (at most 45 minutes). It answers only private-network addresses, needs a random token from the QR code, and serves only the first phone that connects. Nothing is sent to the internet. Details in <a href="https://github.com/OWNER/RambiBox/blob/main/SECURITY.md">SECURITY.md</a>.</p></div>
+          </details>
+          <details>
+            <summary>The phone page shows a certificate warning (Brave) or noisy colors.</summary>
+            <div class="answer"><p>In Brave, tap <b>Show details → Visit this website</b>. Brave Shields add random noise to camera images ("farbling"); turn Shields off for this page (lion icon) for the best accuracy. On iPhone, open the setup link in <b>Safari</b> to install the profile — then enable it under <span class="path">Settings → General → About → Certificate Trust Settings</span>.</p></div>
+          </details>
+          <details>
+            <summary>Does it work with HDR?</summary>
+            <div class="answer"><p>Yes. HDR desktops are captured in their native 16-bit format and tone-mapped to SDR using Windows' <i>SDR content brightness</i>, so the LEDs look like the picture — not washed out or overly bright.</p></div>
+          </details>
+          <details>
+            <summary>The colors are wrong or swapped.</summary>
+            <div class="answer"><p>Turn on <b>Test colors</b> on the Device page: red, green, blue and white are shown in turn. If they are swapped, change the <b>Color order</b>. If the whites look tinted, run the phone calibration or adjust the white balance on the Colors page.</p></div>
+          </details>
+          <details>
+            <summary>The LEDs don't match where they are on the screen.</summary>
+            <div class="answer"><p>On <b>LED layout</b>, set the number of LEDs per side and the start corner and direction, then turn on <b>Identify LEDs</b>: LED 1 lights red and a green dot walks along the strip — it should follow the numbers and the arrow in the preview.</p></div>
+          </details>
+          <details>
+            <summary>Does it work with games and DRM-protected video?</summary>
+            <div class="answer"><p>Games in borderless or windowed fullscreen work fine, and so does most exclusive fullscreen on Windows 10/11. Copy-protected video (some streaming apps and browsers with hardware DRM) can appear black to any screen capture — then the LEDs stay dark. Playing such video in a browser with hardware acceleration turned off usually helps.</p></div>
+          </details>
+          <details>
+            <summary>Is RambiBox affiliated with AmbiBox?</summary>
+            <div class="answer"><p>No. RambiBox is an independent open-source project. It can read AmbiBox settings so switching is painless.</p></div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="cta-title" style="padding-top:0">
+      <div class="container">
+        <div class="cta-band">
+          <h2 id="cta-title">Bring your wall to life.</h2>
+          <p>Free, open source and ready in a minute. Download the exe, start it, and your LED strip follows the picture.</p>
+          <div class="hero-cta">
+            <a class="btn btn-primary btn-lg" href="https://github.com/OWNER/RambiBox/releases/latest"><svg aria-hidden="true"><use href="#i-download"/></svg>Download RambiBox</a>
+            <a class="btn btn-secondary btn-lg" href="https://github.com/OWNER/RambiBox"><svg aria-hidden="true"><use href="#i-github"/></svg>Star on GitHub</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div>
+        <a class="brand" href="#top"><img src="assets/icon-256.png" alt="" width="24" height="24"><span>RambiBox</span></a>
+        <p>© 2026 Ferry. Released under the <a href="https://github.com/OWNER/RambiBox/blob/main/LICENSE">GNU General Public License v3.0</a> (or later). Not affiliated with or endorsed by AmbiBox or Adafruit.</p>
+      </div>
+      <ul class="footer-links">
+        <li><a href="https://github.com/OWNER/RambiBox">GitHub</a></li>
+        <li><a href="https://github.com/OWNER/RambiBox/releases">Releases</a></li>
+        <li><a href="https://github.com/OWNER/RambiBox/issues/new/choose">Report an issue</a></li>
+        <li><a href="https://github.com/OWNER/RambiBox/blob/main/CONTRIBUTING.md">Contributing</a></li>
+        <li><a href="https://github.com/OWNER/RambiBox/blob/main/SECURITY.md">Security</a></li>
+      </ul>
+    </div>
+  </footer>
+
+  <dialog class="lightbox" id="lightbox" aria-label="Screenshot">
+    <img alt="" id="lightbox-img">
+    <div class="lightbox-bar">
+      <p id="lightbox-caption"></p>
+      <form method="dialog"><button class="btn btn-secondary btn-sm" type="submit">Close</button></form>
+    </div>
+  </dialog>
+
+  <script src="script.js" defer></script>
+</body>
+</html>

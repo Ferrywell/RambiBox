@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}".TrimStart('v')
+          "version=$v" >> $env:GITHUB_OUTPUT
+          "prerelease=$(($v -match '-').ToString().ToLower())" >> $env:GITHUB_OUTPUT
+
+      - name: Test
+        run: dotnet test tests/RambiBox.Tests -c Release --filter "Category!=Hardware&Category!=Local"
+
+      # Same as publish.cmd: one self-contained single-file exe, no .NET install needed on the target PC.
+      - name: Publish single-file exe
+        run: >
+          dotnet publish src/RambiBox.App/RambiBox.App.csproj -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
+          -p:PublishReadyToRun=true -p:DebugType=none
+          -p:Version=${{ steps.version.outputs.version }}
+          -o dist
+
+      - name: SHA-256 checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash dist/RambiBox.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          # same format as `sha256sum`, so `sha256sum -c RambiBox.exe.sha256` works
+          "$hash  RambiBox.exe" | Out-File dist/RambiBox.exe.sha256 -Encoding ascii -NoNewline
+          "SHA-256: $hash"
+          'SHA-256 of RambiBox.exe: ' + $hash >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: RambiBox ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
+          files: |
+            dist/RambiBox.exe
+            dist/RambiBox.exe.sha256

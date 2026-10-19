@@ -2,6 +2,15 @@ bin/
 obj/
 dist/
 *.user
+*.suo
 .vs/
+.vscode/
+.idea/
 TestResults/
+*.trx
 .claude/
+*.log
+Thumbs.db
+desktop.ini
+# personal / machine-specific exports that must never be committed
+*.reg

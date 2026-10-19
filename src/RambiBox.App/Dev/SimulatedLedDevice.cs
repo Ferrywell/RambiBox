@@ -21,7 +21,11 @@ public sealed class SimulatedLedDevice : ILedDevice
     private DeviceStatus _status = DeviceStatus.Stopped;
     private string? _port;
 
-    private static readonly SerialPortInfo SimPort = new("COM3", "USB-SERIAL CH340 (simulated)", "1A86:7523");
+    private readonly SerialPortInfo SimPort;
+
+    /// <param name="demo">Demo mode (<c>--demo</c>): describe the port like a real CH340, for clean screenshots.</param>
+    public SimulatedLedDevice(bool demo = false) =>
+        SimPort = new("COM3", demo ? "USB-SERIAL CH340" : "USB-SERIAL CH340 (simulated)", "1A86:7523");
 
     public DeviceStatus Status => _status;
     public string? PortName => _port;

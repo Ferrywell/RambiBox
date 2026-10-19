@@ -1,0 +1,80 @@
+name: Bug report
+description: Something doesn't work as expected.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a problem! Please check the [FAQ](https://OWNER.github.io/RambiBox/#faq) first.
+        **Security issues:** please don't file them here — see [SECURITY.md](https://github.com/OWNER/RambiBox/blob/main/SECURITY.md).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+      placeholder: "After unplugging and re-plugging the USB cable the LEDs stay dark…"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start RambiBox
+        2. …
+  - type: input
+    id: version
+    attributes:
+      label: RambiBox version
+      description: Settings → About.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: windows
+    attributes:
+      label: Windows version
+      options:
+        - Windows 11
+        - Windows 10
+    validations:
+      required: true
+  - type: input
+    id: controller
+    attributes:
+      label: LED controller and sketch
+      description: Board, USB-serial chip, sketch/firmware, baud rate, number of LEDs.
+      placeholder: "Arduino Nano (CH340), FastLED Adalight sketch, 115200 baud, 112 LEDs"
+  - type: input
+    id: display
+    attributes:
+      label: Display and GPU
+      description: Resolution, HDR on/off, number of monitors, graphics card.
+      placeholder: "2560×1440, HDR off, 2 monitors, RTX 3060 Ti"
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Screen capture / ambilight
+        - LED controller / connection
+        - Phone calibration
+        - AmbiBox import
+        - Static color / mood light
+        - User interface
+        - Installation / startup
+        - Other
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: |
+        The log is at `%LocalAppData%\RambiBox\logs\rambibox.log` (Device page → Open log folder).
+        Please paste the relevant part and remove anything you consider private.
+      render: text
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots, photos of the LEDs, ideas about the cause.

@@ -59,8 +59,13 @@ public partial class App : Application
     private void StartupCore(StartupEventArgs e)
     {
         var options = AppOptions.Parse(e.Args);
-        // A simulated (development) instance may run next to the real one.
-        string suffix = options.Simulate ? ".Simulate" : "";
+        // A simulated (development) or demo instance may run next to the real one.
+        string suffix = options.Demo ? ".Demo" : options.Simulate ? ".Simulate" : "";
+        if (options.Demo)
+        {
+            // Before anything logs: keep the demo's log out of the real one (and its paths out of screenshots).
+            Environment.SetEnvironmentVariable("RAMBIBOX_LOG_DIR", Path.Combine(AppHost.DemoDirectory, "logs"));
+        }
 
         if (options.Exit)
         {
@@ -101,7 +106,7 @@ public partial class App : Application
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
 
         Log.Info($"RambiBox {typeof(App).Assembly.GetName().Version?.ToString(3)} starting" +
-                 $"{(options.Simulate ? " (simulated LED device)" : "")}{(options.Tray ? " in the tray" : "")}");
+                 $"{(options.Demo ? " (demo: synthetic picture, simulated LED device)" : options.Simulate ? " (simulated LED device)" : "")}{(options.Tray ? " in the tray" : "")}");
 
         ThemeMode = options.Theme switch
         {

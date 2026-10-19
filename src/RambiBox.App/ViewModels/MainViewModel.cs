@@ -85,6 +85,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         RestorePreviousWhiteBalanceCommand = new RelayCommand(RestorePreviousWhiteBalance, () => _host.PreviousCalibration is not null);
         AllowFirewallCommand = new RelayCommand(async () => await AllowFirewallAsync(), () => !_firewallBusy);
         ResetPhoneCertCommand = new RelayCommand(async () => await ResetPhoneCertAsync(), () => !_host.CalibrationActive);
+        OpenUrlCommand = new RelayCommand(p => AppInfo.OpenUrl(p as string));
 
         RefreshPortsAsync();
         RefreshMonitors();
@@ -93,7 +94,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public SettingsViewModel S { get; }
     public AppHost Host => _host;
-    public bool IsSimulated => _host.Options.Simulate;
+    /// <summary>Shows the "SIMULATED" badge (not in <c>--demo</c>, which is meant for clean screenshots).</summary>
+    public bool IsSimulated => _host.Options.Simulate && !_host.Options.Demo;
 
     // ------------------------------------------------------------------ navigation
 
@@ -578,9 +580,31 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    public string VersionText => $"Version {typeof(App).Assembly.GetName().Version?.ToString(3)}{(IsSimulated ? " · simulated LED device" : "")}";
-    public string SettingsPath => _host.Store.FilePath;
-    public string LogPath => Log.FilePath;
+    public string VersionText => $"Version {AppInfo.Version}{(IsSimulated ? " · simulated LED device" : "")}";
+    public string LicenseText => $"Free and open source under the GNU General Public License ({AppInfo.License}).";
+    public string SettingsPath => DisplayPath(_host.Store.FilePath);
+    public string LogPath => DisplayPath(Log.FilePath);
+
+    /// <summary>Opens a web page (parameter = https URL, see <see cref="AppInfo"/>).</summary>
+    public ICommand OpenUrlCommand { get; }
+
+    /// <summary>Shortens a path with its environment variable (%AppData%, %LocalAppData%, %Temp%) for display.</summary>
+    internal static string DisplayPath(string path)
+    {
+        (string Var, string Dir)[] roots =
+        [
+            ("%Temp%", Path.GetTempPath()),
+            ("%LocalAppData%", Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)),
+            ("%AppData%", Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)),
+        ];
+        foreach (var (name, dir) in roots)
+        {
+            if (string.IsNullOrEmpty(dir)) continue;
+            var root = dir.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            if (path.StartsWith(root, StringComparison.OrdinalIgnoreCase)) return Path.Combine(name, path[root.Length..]);
+        }
+        return path;
+    }
 
     private static void OpenFolder(string path)
     {
