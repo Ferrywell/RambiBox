@@ -2,6 +2,7 @@ using System.Windows.Threading;
 using RambiBox.App.Dev;
 using RambiBox.App.Services;
 using RambiBox.Core;
+using RambiBox.Core.Api;
 using RambiBox.Core.Calibration;
 using RambiBox.Core.Capture;
 using RambiBox.Core.Config;
@@ -92,6 +93,20 @@ public sealed class AppHost : IDisposable
     public event Action? DeviceStatusChanged;
     public event Action? OverrideChanged;
     public event Action? AmbiBoxStateChanged;
+    /// <summary>Raised on the UI thread when the Prismatik API server's state or its control of the LEDs changed.</summary>
+    public event Action? ApiStatusChanged;
+
+    /// <summary>Prismatik-compatible API server for integrations (Home Assistant, scripts, …).</summary>
+    public PrismatikApiServer Api { get; }
+    private readonly PrismatikHostAdapter _apiHost;
+    private bool _started, _lastEnabled;
+    private LightMode _lastMode;
+
+    /// <summary>Latest API control state (UI thread).</summary>
+    public PrismatikControl ApiControl { get; private set; } = PrismatikControl.None;
+
+    /// <summary>An API client's colors are on the LEDs right now (not hidden by a test pattern, calibration or "lights off").</summary>
+    public bool ApiControlling => ApiControl.Active && Settings.Enabled && ActiveOverride == UiOverride.None && !CalibrationActive;
 
     public AppHost(AppOptions options, Dispatcher dispatcher, LogBuffer logs)
     {
@@ -148,6 +163,13 @@ public sealed class AppHost : IDisposable
 
         _lastStartWithWindows = Settings.General.StartWithWindows;
         SnapshotWhiteBalance();
+
+        _apiHost = new PrismatikHostAdapter(this, dispatcher);
+        _apiHost.Refresh(Settings);
+        _lastEnabled = Settings.Enabled;
+        _lastMode = Settings.Mode;
+        Api = new PrismatikApiServer(_apiHost, AppInfo.Version);
+        Api.StatusChanged += _ => _dispatcher.BeginInvoke(() => ApiStatusChanged?.Invoke());
     }
 
     /// <summary>Settings and log folder of a <c>--demo</c> run (temporary, recreated each start).</summary>
@@ -156,6 +178,8 @@ public sealed class AppHost : IDisposable
     public void Start()
     {
         Engine.Start(Settings);
+        _started = true;
+        Api.Apply(Settings.Api);
         SyncStartup();
         _ = RefreshAmbiBoxAsync();
     }
@@ -179,6 +203,7 @@ public sealed class AppHost : IDisposable
             _lastStartWithWindows = Settings.General.StartWithWindows;
             SyncStartup();
         }
+        SyncApi();
         SettingsChanged?.Invoke(sender);
     }
 
@@ -193,6 +218,7 @@ public sealed class AppHost : IDisposable
         Settings.Capture = s.Capture;
         Settings.Static = s.Static;
         Settings.General = s.General;
+        Settings.Api = s.Api;
         Settings.General.FirstRunDone = true;
         if (Settings.Layout.Zones.Count == 0) Settings.Layout.Zones = LayoutGenerator.Generate(Settings.Layout);
         Commit(sender);
@@ -350,24 +376,61 @@ public sealed class AppHost : IDisposable
         if (CalibrationActive && kind != UiOverride.None) return;
         if (kind == ActiveOverride) return;
         ActiveOverride = kind;
-        if (!CalibrationActive)
+        _uiOverride = kind switch
         {
-            Engine.SetOverride(kind switch
-            {
-                UiOverride.White => new WhiteOverride(),
-                UiOverride.Identify => new IdentifyOverride(),
-                UiOverride.TestColors => new TestColorsOverride(),
-                _ => null,
-            });
-        }
+            UiOverride.White => new WhiteOverride(),
+            UiOverride.Identify => new IdentifyOverride(),
+            UiOverride.TestColors => new TestColorsOverride(),
+            _ => null,
+        };
+        ApplyEngineOverride();
         OverrideChanged?.Invoke();
     }
+
+    private ILedOverride? _uiOverride;
 
     public void SetCalibrationActive(bool active)
     {
         if (active) SetOverride(UiOverride.None);
         CalibrationActive = active;
+        if (!active) ApplyEngineOverride(); // an API client may still be driving the LEDs
         OverrideChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Decides what drives the LEDs instead of the normal output. Priority: calibration (sets the engine override
+    /// itself) → UI test pattern → Prismatik API colors (only while the lights are on). UI thread.
+    /// </summary>
+    private void ApplyEngineOverride()
+    {
+        if (CalibrationActive) return;
+        var o = _uiOverride ?? (ApiControl.Active && Settings.Enabled ? ApiControl.Override : null);
+        if (!ReferenceEquals(Engine.Override, o)) Engine.SetOverride(o);
+    }
+
+    /// <summary>The API server took or released the LEDs (UI thread, via <see cref="PrismatikHostAdapter"/>).</summary>
+    internal void OnApiControlChanged(PrismatikControl control)
+    {
+        ApiControl = control;
+        ApplyEngineOverride();
+        ApiStatusChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Commit hook: refreshes the API's settings snapshot, starts/stops/restarts the server, and ends Prismatik's
+    /// "persist on unlock" when the lights or the mode are switched (like Prismatik).
+    /// </summary>
+    private void SyncApi()
+    {
+        _apiHost.Refresh(Settings);
+        if (Settings.Enabled != _lastEnabled || Settings.Mode != _lastMode)
+        {
+            _lastEnabled = Settings.Enabled;
+            _lastMode = Settings.Mode;
+            Api.ReleasePersistedColors();
+        }
+        if (_started) Api.Apply(Settings.Api);
+        ApplyEngineOverride();
     }
 
     // ------------------------------------------------------------------ device / system events
@@ -453,6 +516,7 @@ public sealed class AppHost : IDisposable
             _ledsShutDown = true;
         }
         FlushSave();
+        try { Api.Stop(); } catch (Exception ex) { Log.Warn($"API server stop failed: {ex.Message}"); }
         try { Engine.Stop(); } catch (Exception ex) { Log.Warn($"Engine stop failed: {ex.Message}"); }
         Log.Info("LEDs turned off (session ending)");
         Log.Flush(500);
@@ -509,6 +573,7 @@ public sealed class AppHost : IDisposable
         _saveTimer.Dispose();
         Device.DeviceFound -= OnDeviceFound;
         Device.StatusChanged -= OnDeviceStatusChanged;
+        try { Api.Dispose(); } catch (Exception ex) { Log.Warn($"API server stop failed: {ex.Message}"); }
         try { Engine.Dispose(); } catch (Exception ex) { Log.Warn($"Engine dispose failed: {ex.Message}"); }
         Logs.Dispose();
     }

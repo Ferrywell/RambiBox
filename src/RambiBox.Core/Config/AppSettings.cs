@@ -50,6 +50,8 @@ public sealed class AppSettings
     public CaptureSettings Capture { get; set; } = new();
     public StaticSettings Static { get; set; } = new();
     public GeneralSettings General { get; set; } = new();
+    /// <summary>Prismatik-compatible API server for integrations (see <see cref="ApiSettings"/>).</summary>
+    public ApiSettings Api { get; set; } = new();
 
     public AppSettings Clone() => SettingsSerializer.Clone(this);
 }

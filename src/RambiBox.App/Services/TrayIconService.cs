@@ -57,6 +57,7 @@ public sealed class TrayIconService : IDisposable
 
         _host.SettingsChanged += OnSettingsChanged;
         _host.DeviceStatusChanged += OnDeviceStatusChanged;
+        _host.ApiStatusChanged += OnDeviceStatusChanged;
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
 
         UpdateIcon();
@@ -160,6 +161,7 @@ public sealed class TrayIconService : IDisposable
     {
         if (!_host.Settings.Enabled) return IconState.Off;
         if (_host.Device.Status != DeviceStatus.Connected) return IconState.NotConnected;
+        if (_host.ApiControlling) return IconState.On; // API colors are shown even while the display is off
         var paused = _host.Engine.Paused;
         return paused == PauseReason.None ? IconState.On : IconState.Off;
     }
@@ -201,7 +203,9 @@ public sealed class TrayIconService : IDisposable
     private void UpdateToolTip()
     {
         var st = _host.Engine.GetStats();
-        string text = !_host.Settings.Enabled ? "Lights off" : st.StatusText;
+        string text = !_host.Settings.Enabled ? "Lights off"
+            : _host.ApiControlling && st.DeviceStatus == DeviceStatus.Connected ? "Controlled by an integration"
+            : st.StatusText;
         if (st.DeviceStatus == DeviceStatus.PortBusy && _host.AmbiBoxRunning)
             text = $"{st.PortName} is in use by AmbiBox";
         text = $"RambiBox – {text}";
@@ -221,6 +225,7 @@ public sealed class TrayIconService : IDisposable
         _refreshSoon.Stop();
         _host.SettingsChanged -= OnSettingsChanged;
         _host.DeviceStatusChanged -= OnDeviceStatusChanged;
+        _host.ApiStatusChanged -= OnDeviceStatusChanged;
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
         _icon.Dispose();
         foreach (var i in _iconCache.Values) i.Dispose();

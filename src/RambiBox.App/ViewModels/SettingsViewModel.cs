@@ -366,5 +366,69 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => Set(S.General.OffWhenLocked, value, v => S.General.OffWhenLocked = v);
     }
 
+    // ------------------------------------------------------------------ Prismatik API (integrations)
+
+    public bool ApiEnabled
+    {
+        get => S.Api.Enabled;
+        set => Set(S.Api.Enabled, value, v => S.Api.Enabled = v, nameof(ApiEnabled), nameof(ApiStatusText), nameof(ApiKeyHintVisible));
+    }
+
+    public string ApiPortText
+    {
+        get => S.Api.Port.ToString();
+        set
+        {
+            if (int.TryParse(value?.Trim(), out int port) && port is >= 1 and <= 65535)
+                Set(S.Api.Port, port, v => S.Api.Port = v, nameof(ApiPortText), nameof(ApiStatusText));
+            else
+                OnPropertyChanged(); // revert the text box
+        }
+    }
+
+    public bool ApiAllowLan
+    {
+        get => S.Api.AllowLan;
+        set => Set(S.Api.AllowLan, value, v => S.Api.AllowLan = v, nameof(ApiAllowLan), nameof(ApiStatusText), nameof(ApiKeyHintVisible));
+    }
+
+    public string ApiKey
+    {
+        get => S.Api.ApiKey;
+        set => Set(S.Api.ApiKey, (value ?? "").Trim(), v => S.Api.ApiKey = v, nameof(ApiKey), nameof(ApiKeyHintVisible));
+    }
+
+    /// <summary>"Recommended: set an API key" while other PCs on the network may connect without one.</summary>
+    public bool ApiKeyHintVisible => S.Api.Enabled && S.Api.AllowLan && S.Api.ApiKey.Length == 0;
+
+    public System.Windows.Input.ICommand GenerateApiKeyCommand => _generateKey ??= new RelayCommand(() => ApiKey = ApiSettings.GenerateKey());
+    private RelayCommand? _generateKey;
+
+    public System.Windows.Input.ICommand CopyApiKeyCommand => _copyKey ??= new RelayCommand(() =>
+    {
+        try { if (S.Api.ApiKey.Length > 0) System.Windows.Clipboard.SetText(S.Api.ApiKey); }
+        catch (Exception ex) { RambiBox.Core.Log.Warn($"Could not copy the API key: {ex.Message}"); }
+    });
+    private RelayCommand? _copyKey;
+
+    /// <summary>"Listening on 127.0.0.1:3636 · 1 client · locked by 192.168.2.10".</summary>
+    public string ApiStatusText
+    {
+        get
+        {
+            var st = _host.Api.Status;
+            if (!S.Api.Enabled) return "Off";
+            if (st.Error is { } err) return err;
+            if (!st.Listening) return "Starting…";
+            var text = $"Listening on {st.Endpoint} · {st.Clients} client{(st.Clients == 1 ? "" : "s")}";
+            if (st.LockedBy is { } who) text += $" · locked by {who}";
+            else if (st.Persisting) text += " · showing an integration's last colors";
+            return text;
+        }
+    }
+
+    /// <summary>Called when the API server's state changed.</summary>
+    public void RefreshApiStatus() => OnPropertyChanged(nameof(ApiStatusText));
+
     public void Dispose() => _host.SettingsChanged -= OnSettingsChanged;
 }

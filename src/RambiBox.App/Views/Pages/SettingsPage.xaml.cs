@@ -61,6 +61,7 @@ public partial class SettingsPage : UserControl
     {
         var cur = _vm.Host.Settings;
         s.General = cur.General;
+        s.Api = cur.Api;
         s.Capture.BlackBarDetection = cur.Capture.BlackBarDetection;
         s.Capture.MonitorId = cur.Capture.MonitorId;
         s.Capture.Method = cur.Capture.Method;
