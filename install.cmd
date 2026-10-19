@@ -7,6 +7,10 @@ setlocal
 cd /d "%~dp0"
 if not exist dist\RambiBox.exe call publish.cmd || exit /b 1
 set TARGET=%LocalAppData%\Programs\RambiBox
+rem ask running instances to exit cleanly (LEDs off), then make sure
+if exist "%TARGET%\RambiBox.exe" "%TARGET%\RambiBox.exe" --exit
+if exist dist\RambiBox.exe dist\RambiBox.exe --exit
+ping -n 3 127.0.0.1 >nul
 taskkill /im RambiBox.exe /f >nul 2>&1
 if not exist "%TARGET%" mkdir "%TARGET%"
 copy /y dist\RambiBox.exe "%TARGET%\RambiBox.exe" >nul || exit /b 1
