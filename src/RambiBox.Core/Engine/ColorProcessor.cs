@@ -14,6 +14,7 @@ public sealed class ColorProcessor
     // Cached per-settings coefficients
     private float _gamma = 1, _sat = 1, _dark, _min, _bright = 1;
     private float _wbR = 1, _wbG = 1, _wbB = 1;
+    private float _chGammaR = 1, _chGammaG = 1, _chGammaB = 1;
     private float _tauSeconds;
     private float[]? _hueMatrix; // 3x3 row-major, null when hue shift is 0
 
@@ -27,6 +28,9 @@ public sealed class ColorProcessor
         _wbR = (float)c.WhiteR;
         _wbG = (float)c.WhiteG;
         _wbB = (float)c.WhiteB;
+        _chGammaR = (float)c.ChannelGammaR;
+        _chGammaG = (float)c.ChannelGammaG;
+        _chGammaB = (float)c.ChannelGammaB;
         _tauSeconds = c.SmoothingMs / 1000f;
         _hueMatrix = Math.Abs(c.HueShift) < 0.01 ? null : HueRotation((float)c.HueShift);
     }
@@ -121,11 +125,19 @@ public sealed class ColorProcessor
         float min = whiteBalanceOnly ? 0 : _min;
         float scale = 1f - min;
         float kr = _bright * _wbR * 255f, kg = _bright * _wbG * 255f, kb = _bright * _wbB * 255f;
+        bool chGamma = _chGammaR != 1f || _chGammaG != 1f || _chGammaB != 1f;
         for (int i = 0, n = Math.Min(rgb.Length, dest.Length); i + 2 < n; i += 3)
         {
-            dest[i] = ToByte((min + rgb[i] * scale) * kr);
-            dest[i + 1] = ToByte((min + rgb[i + 1] * scale) * kg);
-            dest[i + 2] = ToByte((min + rgb[i + 2] * scale) * kb);
+            float r = min + rgb[i] * scale, g = min + rgb[i + 1] * scale, b = min + rgb[i + 2] * scale;
+            if (chGamma)
+            {
+                r = MathF.Pow(r, _chGammaR);
+                g = MathF.Pow(g, _chGammaG);
+                b = MathF.Pow(b, _chGammaB);
+            }
+            dest[i] = ToByte(r * kr);
+            dest[i + 1] = ToByte(g * kg);
+            dest[i + 2] = ToByte(b * kb);
         }
     }
 

@@ -45,6 +45,9 @@ public static class SettingsSerializer
         c.WhiteR = Math.Clamp(c.WhiteR, 0, 1);
         c.WhiteG = Math.Clamp(c.WhiteG, 0, 1);
         c.WhiteB = Math.Clamp(c.WhiteB, 0, 1);
+        c.ChannelGammaR = Math.Clamp(c.ChannelGammaR, 0.5, 2);
+        c.ChannelGammaG = Math.Clamp(c.ChannelGammaG, 0.5, 2);
+        c.ChannelGammaB = Math.Clamp(c.ChannelGammaB, 0.5, 2);
         c.MinBrightness = Math.Clamp(c.MinBrightness, 0, 1);
         c.DarkThreshold = Math.Clamp(c.DarkThreshold, 0, 0.5);
         c.SmoothingMs = Math.Clamp(c.SmoothingMs, 0, 2000);

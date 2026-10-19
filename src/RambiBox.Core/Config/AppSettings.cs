@@ -116,6 +116,13 @@ public sealed class ColorSettings
     public double WhiteR { get; set; } = 0.64;
     public double WhiteG { get; set; } = 1.0;
     public double WhiteB { get; set; } = 0.51;
+    /// <summary>
+    /// Per-channel LED response correction (output = value^gamma before white balance), 1 = linear.
+    /// Fitted by phone calibration from a dark-gray photo so dim scenes don't drift green/blue.
+    /// </summary>
+    public double ChannelGammaR { get; set; } = 1.0;
+    public double ChannelGammaG { get; set; } = 1.0;
+    public double ChannelGammaB { get; set; } = 1.0;
     /// <summary>Lowest output level 0..1 so LEDs never go fully dark (0 = off allowed).</summary>
     public double MinBrightness { get; set; } = 0.0;
     /// <summary>Colors with max channel below this (0..1) are treated as black. Removes flicker in dark scenes.</summary>
