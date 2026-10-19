@@ -14,6 +14,7 @@ namespace RambiBox.Core.Devices;
 /// <para>Thread-safety: all public members may be called from any thread; nothing but <see cref="Blackout"/>,
 /// <see cref="Dispose"/> and <see cref="WaitForSlot"/> blocks.</para>
 /// </summary>
+[LedDevice(DeviceType.Adalight)]
 public sealed class AdalightDevice : ILedDevice
 {
     private static readonly string[] KnownUsbIds =

@@ -141,7 +141,7 @@ public sealed class AppHost : IDisposable
 
         // Windows Graphics Capture by default (Desktop Duplication can make Chromium stutter), switchable live.
         Sampler = options.Demo ? new DemoScreenSampler() : new SwitchingScreenSampler();
-        Device = options.Simulate ? new SimulatedLedDevice(demo: options.Demo) : new AdalightDevice();
+        Device = options.Simulate ? new SimulatedLedDevice(demo: options.Demo) : new SwitchingLedDevice();
         Device.DeviceFound += OnDeviceFound;
         Device.StatusChanged += OnDeviceStatusChanged;
         Engine = new LightEngine(Sampler, Device);

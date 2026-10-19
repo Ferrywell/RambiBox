@@ -67,6 +67,68 @@ public sealed class DeviceSettings
     public string? LastPort { get; set; }
     /// <summary>Remembered by auto-detect: USB VID/PID ("1A86:7523") of the last working device.</summary>
     public string? LastUsbId { get; set; }
+
+    // ---- device type (Prismatik-compatible device families). Serial fields above apply to the serial types.
+
+    /// <summary>Which kind of LED controller drives the strip.</summary>
+    public DeviceType Type { get; set; } = DeviceType.Adalight;
+
+    /// <summary>Network devices (WLED, DDP, E1.31): IP address or host name (e.g. "wled-tv.local").</summary>
+    public string? Host { get; set; }
+    /// <summary>Network devices: UDP port; 0 = the protocol's default (WLED realtime 21324, DDP 4048, E1.31 5568).</summary>
+    public int NetworkPort { get; set; }
+    /// <summary>WLED realtime protocol; Auto picks WARLS / DRGB / DNRGB by LED count like Prismatik.</summary>
+    public NetworkProtocol Protocol { get; set; } = NetworkProtocol.Auto;
+    /// <summary>E1.31 / sACN: first universe (170 RGB LEDs per universe).</summary>
+    public int E131Universe { get; set; } = 1;
+    /// <summary>E1.31 / sACN: send to the multicast group instead of unicast to <see cref="Host"/>.</summary>
+    public bool E131Multicast { get; set; }
+    /// <summary>
+    /// WLED realtime: seconds the controller keeps showing realtime data after the last packet before returning to
+    /// its own effect (1..255, 255 = forever). Prismatik uses 1–5 s; RambiBox sends a keep-alive every second anyway.
+    /// </summary>
+    public int WledTimeoutSeconds { get; set; } = 2;
+    /// <summary>
+    /// Identifies a specific device when several are present: HID device serial/path for Lightpack, the WLED MAC/name
+    /// from discovery, … Null = first one found.
+    /// </summary>
+    public string? DeviceId { get; set; }
+}
+
+/// <summary>LED controller families (matches what Prismatik supports on Windows, plus DDP and E1.31).</summary>
+[JsonConverter(typeof(TolerantEnumConverter<DeviceType>))]
+public enum DeviceType
+{
+    /// <summary>Adalight over USB serial ("Ada" header) — Arduino + WS281x, the classic DIY setup.</summary>
+    Adalight,
+    /// <summary>Ardulight serial protocol (Prismatik "Ardulight").</summary>
+    Ardulight,
+    /// <summary>AWA / HyperSerial protocol ("Awa" header + Fletcher checksum, high baud rates; HyperHDR firmware).</summary>
+    Awa,
+    /// <summary>TPM2 serial protocol (0xC9 0xDA … 0x36).</summary>
+    Tpm2,
+    /// <summary>Lightpack / Lightpack 2 USB HID devices.</summary>
+    Lightpack,
+    /// <summary>WLED over Wi-Fi with its UDP realtime protocols (WARLS / DRGB / DNRGB), like Prismatik.</summary>
+    Wled,
+    /// <summary>DDP (Distributed Display Protocol) over UDP — WLED, xLights controllers, ESPixelStick…</summary>
+    Ddp,
+    /// <summary>E1.31 / sACN over UDP — DMX-over-Ethernet controllers, WLED, Falcon…</summary>
+    E131,
+    /// <summary>Alienware AlienFX lighting via the Alienware LightFX SDK (LightFX.dll).</summary>
+    AlienFx,
+    /// <summary>No hardware: shows the LED colors only in the app's preview (testing, demos).</summary>
+    Virtual,
+}
+
+[JsonConverter(typeof(TolerantEnumConverter<NetworkProtocol>))]
+public enum NetworkProtocol
+{
+    /// <summary>WLED: WARLS up to 255 LEDs, DRGB up to 490, DNRGB above (chunks of 489).</summary>
+    Auto,
+    Warls,
+    Drgb,
+    Dnrgb,
 }
 
 /// <summary>A capture rectangle for one LED, normalized to 0..1 of the monitor (left/top inclusive).</summary>
@@ -169,6 +231,29 @@ public sealed class CaptureMethodJsonConverter : JsonConverter<CaptureMethod>
 
     public override void Write(System.Text.Json.Utf8JsonWriter writer, CaptureMethod value, System.Text.Json.JsonSerializerOptions options)
         => writer.WriteStringValue(Enum.IsDefined(value) ? value.ToString() : nameof(CaptureMethod.Auto));
+}
+
+/// <summary>
+/// Like <see cref="CaptureMethodJsonConverter"/> for any enum: unknown names/numbers (written by a newer version, a typo)
+/// read as the enum's default (its first value) instead of failing the whole settings file.
+/// </summary>
+public sealed class TolerantEnumConverter<TEnum> : JsonConverter<TEnum> where TEnum : struct, Enum
+{
+    public override TEnum Read(ref System.Text.Json.Utf8JsonReader reader, Type typeToConvert, System.Text.Json.JsonSerializerOptions options)
+    {
+        if (reader.TokenType == System.Text.Json.JsonTokenType.String
+            && Enum.TryParse<TEnum>(reader.GetString(), ignoreCase: true, out var m) && Enum.IsDefined(m)
+            && !int.TryParse(reader.GetString(), out _))
+            return m;
+        if (reader.TokenType == System.Text.Json.JsonTokenType.Number && reader.TryGetInt32(out int n)
+            && Enum.IsDefined(typeof(TEnum), n))
+            return (TEnum)Enum.ToObject(typeof(TEnum), n);
+        reader.Skip();
+        return default;
+    }
+
+    public override void Write(System.Text.Json.Utf8JsonWriter writer, TEnum value, System.Text.Json.JsonSerializerOptions options)
+        => writer.WriteStringValue(Enum.IsDefined(value) ? value.ToString() : default(TEnum).ToString());
 }
 
 public sealed class CaptureSettings

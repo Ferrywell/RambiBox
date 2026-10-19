@@ -59,7 +59,14 @@ public static class SettingsSerializer
         if (string.IsNullOrWhiteSpace(s.Device.Port)) s.Device.Port = DeviceSettings.AutoPort;
         if (s.Device.BaudRate <= 0) s.Device.BaudRate = 115200;
         s.Capture.MonitorId ??= "";
-        if (!Enum.IsDefined(s.Capture.Method)) s.Capture.Method = CaptureMethod.Auto; // e.g. a number from a hand-edited file
+        if (!Enum.IsDefined(s.Capture.Method)) s.Capture.Method = CaptureMethod.Auto;
+        var d = s.Device;
+        if (!Enum.IsDefined(d.Type)) d.Type = DeviceType.Adalight;
+        if (!Enum.IsDefined(d.Protocol)) d.Protocol = NetworkProtocol.Auto;
+        d.NetworkPort = Math.Clamp(d.NetworkPort, 0, 65535);
+        d.E131Universe = Math.Clamp(d.E131Universe, 1, 63999);
+        d.WledTimeoutSeconds = Math.Clamp(d.WledTimeoutSeconds, 1, 255);
+        d.Host = string.IsNullOrWhiteSpace(d.Host) ? null : d.Host.Trim(); // e.g. a number from a hand-edited file
 
         var c = s.Color;
         c.Brightness = Math.Clamp(c.Brightness, 0, 1);
