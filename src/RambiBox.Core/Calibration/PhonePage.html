@@ -3,232 +3,636 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="color-scheme" content="dark">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#202020" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f3f3f3" media="(prefers-color-scheme: light)">
+<meta name="format-detection" content="telephone=no">
 <title>RambiBox calibration</title>
 <style>
+  /* ------------------------------------------------------------------ tokens (Windows 11 Fluent, like the app) */
   :root {
-    --bg: #101114; --card: #1b1d22; --text: #eceef2; --muted: #9aa0ab; --accent: #4f8cff;
-    --ok: #3ecf8e; --warn: #ffb547; --bad: #ff5d5d; --line: #2a2d34;
+    color-scheme: dark;
+    --bg: #202020; --bg-run: #1a1a1a; --card: #2b2b2b; --card2: #323232;
+    --stroke: rgba(255, 255, 255, .08); --stroke-strong: rgba(255, 255, 255, .15); --divider: rgba(255, 255, 255, .08);
+    --text: #ffffff; --text2: #c8c8c8; --text3: #9d9d9d;
+    --ctrl: #373737; --ctrl-press: #2f2f2f; --ctrl-stroke: rgba(255, 255, 255, .07); --ctrl-stroke-b: rgba(255, 255, 255, .13);
+    --accent: #db9ee5; --accent-press: #c08bc9; --on-accent: #000000; --accent-text: #e2ade9;
+    --ok: #6ccb5f; --warn: #fce100; --bad: #ff99a4; --info: #db9ee5; --on-sev: #000000;
+    --ib-info: #2e2e2e; --ib-ok: #393d1b; --ib-warn: #433519; --ib-bad: #442726;
+    --track: rgba(255, 255, 255, .16);
+    --shadow: 0 8px 28px rgba(0, 0, 0, .38);
+    --ov-screen: #4f8cff; --ov-glow: #3ecf8e; --ov-ref: #ffb547; --ov-bad: #ff5d5d;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, Roboto, "Helvetica Neue", sans-serif;
   }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--bg); color: var(--text);
-    font: 17px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-text-size-adjust: 100%; }
-  main { max-width: 680px; margin: 0 auto; padding: 14px 16px calc(24px + env(safe-area-inset-bottom)); }
-  h1 { font-size: 22px; margin: 4px 0 10px; }
-  h1 small { color: var(--muted); font-weight: 400; font-size: 15px; display: block; }
-  h2 { font-size: 18px; margin: 0 0 8px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin: 12px 0; }
-  ol { margin: 0; padding-left: 22px; } ol li { margin: 6px 0; }
-  .muted { color: var(--muted); font-size: 15px; }
-  .small { font-size: 13px; color: var(--muted); }
-  button, .btn { display: block; width: 100%; border: 0; border-radius: 12px; padding: 15px; margin: 10px 0 0;
-    font-weight: 600; font-size: 17px; line-height: 1.2; font-family: inherit; color: #fff; background: var(--accent); cursor: pointer;
-    text-align: center; text-decoration: none; -webkit-tap-highlight-color: transparent; }
-  button.secondary, .btn.secondary { background: #2b2f38; color: var(--text); }
-  button.ok { background: #1f9d68; }
-  button.link { background: none; color: var(--muted); font-weight: 400; font-size: 15px; padding: 8px; text-decoration: underline; }
-  button:disabled { opacity: .45; }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      color-scheme: light;
+      --bg: #f3f3f3; --bg-run: #ebebeb; --card: #fbfbfb; --card2: #f5f5f5;
+      --stroke: rgba(0, 0, 0, .08); --stroke-strong: rgba(0, 0, 0, .16); --divider: rgba(0, 0, 0, .08);
+      --text: #1a1a1a; --text2: #5c5c5c; --text3: #737373;
+      --ctrl: #ffffff; --ctrl-press: #f3f3f3; --ctrl-stroke: rgba(0, 0, 0, .08); --ctrl-stroke-b: rgba(0, 0, 0, .18);
+      --accent: #8e3aa7; --accent-press: #9d52b4; --on-accent: #ffffff; --accent-text: #7c2f93;
+      --ok: #0f7b0f; --warn: #9d5d00; --bad: #c42b1c; --info: #8e3aa7; --on-sev: #ffffff;
+      --ib-info: #f4f0f6; --ib-ok: #dff6dd; --ib-warn: #fff4ce; --ib-bad: #fde7e9;
+      --track: rgba(0, 0, 0, .14);
+      --shadow: 0 8px 28px rgba(0, 0, 0, .14);
+    }
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #f3f3f3; --bg-run: #ebebeb; --card: #fbfbfb; --card2: #f5f5f5;
+    --stroke: rgba(0, 0, 0, .08); --stroke-strong: rgba(0, 0, 0, .16); --divider: rgba(0, 0, 0, .08);
+    --text: #1a1a1a; --text2: #5c5c5c; --text3: #737373;
+    --ctrl: #ffffff; --ctrl-press: #f3f3f3; --ctrl-stroke: rgba(0, 0, 0, .08); --ctrl-stroke-b: rgba(0, 0, 0, .18);
+    --accent: #8e3aa7; --accent-press: #9d52b4; --on-accent: #ffffff; --accent-text: #7c2f93;
+    --ok: #0f7b0f; --warn: #9d5d00; --bad: #c42b1c; --info: #8e3aa7; --on-sev: #ffffff;
+    --ib-info: #f4f0f6; --ib-ok: #dff6dd; --ib-warn: #fff4ce; --ib-bad: #fde7e9;
+    --track: rgba(0, 0, 0, .14);
+    --shadow: 0 8px 28px rgba(0, 0, 0, .14);
+  }
+
+  /* ------------------------------------------------------------------ base */
+  *, *::before, *::after { box-sizing: border-box; }
+  html { background: var(--bg); -webkit-text-size-adjust: 100%; text-size-adjust: 100%; overscroll-behavior: none; }
+  body { margin: 0; min-height: 100vh; min-height: 100svh; background: var(--bg); color: var(--text);
+    font: 15px/1.45 var(--font); -webkit-tap-highlight-color: transparent; overscroll-behavior: none;
+    -webkit-font-smoothing: antialiased; overflow-wrap: break-word; }
+  html.lock, html.lock body { overflow: hidden; height: 100%; }
+  button, input, label.btn { font: inherit; }
+  a { color: var(--accent-text); }
+  b { font-weight: 600; }
   .hidden { display: none !important; }
-  .msg { margin: 0; } .bad { color: var(--bad); } .good { color: var(--ok); } .warn { color: var(--warn); }
-  .row { display: flex; gap: 10px; } .row > * { flex: 1; }
-  .big { font-size: 34px; font-weight: 700; } .big small { font-size: 15px; color: var(--muted); font-weight: 400; }
-  .spinner { display: inline-block; width: 16px; height: 16px; border: 3px solid #fff5; border-top-color: #fff;
-    border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: -3px; margin-right: 8px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .small { font-size: 13px; color: var(--text2); margin: 8px 0 0; }
+  .center { text-align: center; }
+  .defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+  /* ------------------------------------------------------------------ app bar */
+  .appbar { display: flex; align-items: center; gap: 12px; max-width: 640px; margin: 0 auto;
+    padding: calc(env(safe-area-inset-top) + 12px) max(16px, env(safe-area-inset-right)) 6px max(16px, env(safe-area-inset-left)); }
+  .logo { width: 32px; height: 32px; flex: none; display: block; }
+  .brand { flex: 1; min-width: 0; line-height: 1.2; }
+  .brand b { display: block; font-size: 16px; }
+  .brand span { display: block; font-size: 12px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; flex: none; font-size: 12px; color: var(--text2);
+    padding: 4px 10px; border-radius: 999px; background: var(--card); border: 1px solid var(--stroke); white-space: nowrap; }
+  .pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--text3); }
+  .pill[data-kind="ok"] i { background: var(--ok); }
+  .pill[data-kind="bad"] i { background: var(--bad); }
+
+  main { max-width: 640px; margin: 0 auto;
+    padding: 4px max(16px, env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+  .page-title { font-size: 26px; line-height: 1.2; font-weight: 600; margin: 14px 0 4px; letter-spacing: -.01em; }
+  .page-sub { color: var(--text2); font-size: 14px; margin: 0 0 16px; }
+  .sh { font-size: 14px; font-weight: 600; margin: 20px 2px 8px; }
+
+  /* ------------------------------------------------------------------ cards, setting rows, step lists */
+  .card { background: var(--card); border: 1px solid var(--stroke); border-radius: 8px; padding: 14px 16px; margin: 0 0 8px; }
+  .card.row { display: flex; align-items: center; gap: 14px; }
+  .setting { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; min-height: 68px; }
+  .setting .ic { width: 22px; height: 22px; flex: none; color: var(--text); }
+  .setting .txt { flex: 1 1 170px; min-width: 0; }
+  .setting .t, .card > .t { font-size: 15px; }
+  .setting .d { font-size: 13px; color: var(--text2); margin-top: 2px; }
+  .setting > .btn, .setting > .ctl { flex: none; margin-left: auto; }
+  .ctl { display: flex; gap: 8px; }
+  .ctl .btn { min-width: 48px; font-size: 20px; padding: 6px 12px; }
+
+  .steps { list-style: none; counter-reset: st; padding: 2px 16px; }
+  .steps > li { counter-increment: st; position: relative; padding: 14px 0 14px 44px; border-top: 1px solid var(--divider); }
+  .steps > li:first-child { border-top: 0; }
+  .steps > li::before { content: counter(st); position: absolute; left: 0; top: 13px; width: 28px; height: 28px; border-radius: 50%;
+    background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: 14px; line-height: 28px; text-align: center; }
+  .st-t { font-weight: 600; font-size: 15px; line-height: 1.3; padding-top: 3px; }
+  .st-d { margin: 3px 0 0; color: var(--text2); font-size: 14px; }
+  .st-d b { color: var(--text); }
+  .steps .btn { margin-top: 10px; }
+
+  /* ------------------------------------------------------------------ buttons */
+  .btn { -webkit-appearance: none; appearance: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 44px; padding: 10px 16px; border-radius: 6px; border: 1px solid var(--ctrl-stroke); border-bottom-color: var(--ctrl-stroke-b);
+    background: var(--ctrl); color: var(--text); font-size: 15px; font-weight: 500; line-height: 1.25; text-align: center;
+    text-decoration: none; cursor: pointer; -webkit-user-select: none; user-select: none; touch-action: manipulation;
+    transition: background-color .12s, opacity .12s; }
+  .btn:active { background: var(--ctrl-press); }
+  .btn svg { width: 20px; height: 20px; flex: none; }
+  .btn.primary { background: var(--accent); color: var(--on-accent); border-color: transparent; box-shadow: inset 0 -1px rgba(0, 0, 0, .18); }
+  .btn.primary:active { background: var(--accent-press); }
+  .btn.block { display: flex; width: 100%; }
+  .btn.lg { min-height: 52px; font-size: 16px; font-weight: 600; }
+  .btn.link { background: none; border-color: transparent; box-shadow: none; color: var(--accent-text); font-weight: 400; padding: 8px 6px; }
+  .btn.link.muted { color: var(--text2); }
+  .btn.subtle { background: transparent; border-color: transparent; box-shadow: none; }
+  .btn.danger { background: var(--bad); color: var(--on-sev); border-color: transparent; }
+  .btn:disabled, .btn.is-busy { opacity: .45; pointer-events: none; }
+  .btn:focus-visible, .tabs button:focus-visible, .ab button:focus-visible, .swatches button:focus-visible, #pad:focus-visible {
+    outline: 2px solid var(--text); outline-offset: 2px; }
+  .links { display: flex; flex-direction: column; align-items: center; margin-top: 6px; }
+  .btnrow { display: flex; gap: 8px; }
+  .btnrow > .btn { flex: 1 1 0; min-width: 0; }
+
+  /* ------------------------------------------------------------------ InfoBar */
+  .infobar { --sev: var(--info); display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 6px;
+    border: 1px solid var(--stroke); background: var(--ib-info); margin: 0 0 8px; }
+  .infobar.success { --sev: var(--ok); background: var(--ib-ok); }
+  .infobar.warning { --sev: var(--warn); background: var(--ib-warn); }
+  .infobar.error { --sev: var(--bad); background: var(--ib-bad); }
+  .infobar p { margin: 0; flex: 1; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+  .ib-ic { flex: none; width: 18px; height: 18px; margin-top: 1px; border-radius: 50%; background: var(--sev); color: var(--on-sev);
+    font: 700 12px/18px var(--font); text-align: center; }
+  .ib-ic::before { content: "i"; }
+  .success > .ib-ic::before { content: "\2713"; }
+  .warning > .ib-ic::before { content: "!"; }
+  .error > .ib-ic::before { content: "\2715"; font-size: 10px; }
+  .ib-close { flex: none; width: 32px; height: 32px; margin: -6px -8px -6px 0; border: 0; border-radius: 4px; background: transparent;
+    color: var(--text2); font-size: 14px; cursor: pointer; }
+  .toast { position: fixed; z-index: 40; top: calc(env(safe-area-inset-top) + 10px);
+    left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); max-width: 600px; margin: 0 auto; box-shadow: var(--shadow); }
+
+  /* ------------------------------------------------------------------ progress */
+  .progress { height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; }
+  .progress > i { display: block; height: 100%; width: 0; border-radius: 2px; background: var(--accent); transition: width .4s ease; }
+  .progress.indeterminate > i { width: 40% !important; animation: indet 1.5s ease-in-out infinite; }
+  @keyframes indet { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
+  .ring { display: inline-block; flex: none; width: 20px; height: 20px; border-radius: 50%; border: 2.5px solid var(--track);
+    border-top-color: var(--accent); animation: spin .9s linear infinite; }
+  .ring.sm { width: 16px; height: 16px; border-width: 2px; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  .waiting { display: flex; align-items: center; gap: 10px; color: var(--text2); font-size: 14px; margin: 12px 2px 0; }
+
+  /* ------------------------------------------------------------------ setup */
+  .copyrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .url { flex: 1 1 170px; min-width: 0; min-height: 44px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--ctrl-stroke);
+    border-bottom-color: var(--accent); background: var(--bg); color: var(--text);
+    font: 16px/1.3 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .copyrow .btn { flex: 0 1 auto; }
   input[type=file] { display: none; }
-  .camwrap { position: relative; border-radius: 12px; overflow: hidden; background: #000; margin-top: 10px; touch-action: manipulation; }
-  .camwrap video { display: block; width: 100%; height: auto; }
-  .camwrap canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
-  .bar { height: 8px; border-radius: 4px; background: #2b2f38; overflow: hidden; margin: 8px 0 4px; }
-  .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .4s; }
-  .hints { margin: 8px 0 0; padding: 0; list-style: none; }
-  .hints li { color: var(--warn); font-size: 15px; margin: 4px 0; }
-  .url { word-break: break-all; font: 13px/1.35 ui-monospace, Menlo, monospace; color: var(--muted); background: #0b0c0e; padding: 8px; border-radius: 8px; margin-top: 8px; }
-  .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
-  .tabs button { margin: 0; padding: 10px 6px; font-size: 15px; background: #2b2f38; color: var(--text); }
-  .tabs button.on { background: var(--accent); color: #fff; }
-  .padwrap { display: flex; justify-content: center; }
-  canvas#pad { width: min(84vw, 340px); height: min(84vw, 340px); border-radius: 16px; touch-action: none; display: block; }
-  .nudge { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 10px; }
-  .nudge button { margin: 0; padding: 12px 4px; font-size: 15px; background: #2b2f38; color: var(--text); }
-  .swatches { display: flex; gap: 8px; margin: 6px 0 4px; }
-  .swatches button { margin: 0; height: 46px; border-radius: 10px; border: 3px solid transparent; position: relative; padding: 0; }
-  .swatches button.on { border-color: #fff; }
-  .swatches button span { position: absolute; right: 3px; bottom: 1px; font-size: 12px; color: #000; background: #fffc; border-radius: 6px; padding: 0 4px; }
-  .ab { display: flex; gap: 10px; } .ab button { font-size: 22px; padding: 18px; background: #2b2f38; }
-  .ab button.on { background: var(--accent); }
-  .steps-small li { font-size: 15px; }
+
+  /* ------------------------------------------------------------------ live camera (running: full-screen, no scrolling) */
+  .liverun { position: fixed; inset: 0; z-index: 20; display: grid; background: var(--bg-run);
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto auto;
+    grid-template-areas: "head" "stage" "panel" "bar";
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+    overscroll-behavior: none; }
+  .livehead { grid-area: head; padding: 10px 16px 10px; }
+  .lh-row { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+  .lh-row .logo { width: 26px; height: 26px; }
+  .lh-title { flex: 1; min-width: 0; }
+  .lh-title h2 { margin: 0; font-size: 18px; line-height: 1.2; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lh-title span { display: block; font-size: 12px; color: var(--text2); }
+  .errbox { flex: none; text-align: right; line-height: 1.05; }
+  .errbox b { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .errbox b small { font-size: 14px; font-weight: 500; }
+  .errbox span { display: block; font-size: 11px; color: var(--text2); margin-top: 2px; }
+  .errbox[data-level="ok"] b { color: var(--ok); }
+  .errbox[data-level="warn"] b { color: var(--warn); }
+  .errbox[data-level="bad"] b { color: var(--bad); }
+  .stage { grid-area: stage; position: relative; min-height: 0; margin: 0 12px; border-radius: 8px; background: #000; overflow: hidden;
+    display: flex; align-items: center; justify-content: center; touch-action: none; }
+  .camwrap { position: relative; flex: none; width: 100%; height: 100%; }
+  .camwrap video, .camwrap .democam { display: block; width: 100%; height: 100%; object-fit: contain; background: #000; }
+  .camwrap canvas#overlay { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
+  .livepanel { grid-area: panel; max-height: 30vh; max-height: 30dvh; overflow-y: auto; overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch; padding: 12px 16px 4px; }
+  .note { margin: 0 0 8px; font-size: 15px; }
+  .hints { list-style: none; margin: 0; padding: 0; }
+  .hints li { margin: 0 0 6px; padding: 8px 12px; font-size: 14px; }
+  .legend { position: absolute; left: 6px; right: 6px; bottom: 6px; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px;
+    margin: 0; font-size: 11px; color: #ececec; pointer-events: none; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px 2px 6px; border-radius: 999px; background: rgba(0, 0, 0, .62); }
+  .legend i { width: 10px; height: 10px; border-radius: 3px; border: 2px solid; }
+  .legend .scr { border-color: var(--ov-screen); background: rgba(79, 140, 255, .2); }
+  .legend .glow { border-color: var(--ov-glow); background: rgba(62, 207, 142, .2); }
+  .legend .ref { border-color: var(--ov-ref); background: rgba(255, 181, 71, .2); }
+  .legend .bad { border-color: var(--ov-bad); background: rgba(255, 93, 93, .2); }
+  .liverun .links { flex-direction: row; flex-wrap: wrap; justify-content: flex-start; gap: 0 12px; margin: 6px 0 0 -6px; }
+  .liverun .links .btn { font-size: 14px; }
+  .actionbar { grid-area: bar; display: flex; gap: 8px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--divider); background: var(--bg-run); }
+  .actionbar .btn { flex: 1 1 0; min-width: 0; min-height: 48px; }
+
+  @media (orientation: landscape) {
+    .liverun { grid-template-columns: minmax(0, 1fr) clamp(250px, 36%, 380px); grid-template-rows: auto minmax(0, 1fr) auto;
+      grid-template-areas: "stage head" "stage panel" "stage bar"; column-gap: 12px;
+      padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); }
+    .stage { margin: 0; }
+    .livehead { padding: 4px 4px 8px; }
+    .livepanel { max-height: none; padding: 6px 4px 4px; }
+    .actionbar { padding: 8px 0 0; border-top: 0; background: none; }
+    .actionbar .btn { min-height: 44px; }
+  }
+
+  /* ------------------------------------------------------------------ video */
+  .vp-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .vp-head b { flex: 1; min-width: 0; }
+  .vp-pct { font-variant-numeric: tabular-nums; color: var(--text2); font-size: 14px; }
+  #vProg { margin-top: 12px; }
+
+  /* ------------------------------------------------------------------ eye fine-tune */
+  .tabs { display: flex; gap: 4px; padding: 3px; background: var(--card); border: 1px solid var(--stroke); border-radius: 8px; margin: 12px 0; }
+  .tabs button { position: relative; flex: 1 1 0; min-width: 0; min-height: 44px; padding: 6px 4px; border: 0; border-radius: 5px;
+    background: transparent; color: var(--text2); font-size: 14px; font-weight: 500; cursor: pointer; touch-action: manipulation; }
+  .tabs button.on { background: var(--ctrl); color: var(--text); box-shadow: 0 0 0 1px var(--ctrl-stroke); }
+  .tabs button.on::after { content: ""; position: absolute; left: 50%; bottom: 4px; width: 16px; height: 3px; margin-left: -8px;
+    border-radius: 2px; background: var(--accent); }
+  .tabs button:disabled { opacity: .4; }
+  .eyetip { color: var(--text2); font-size: 14px; margin: 0 2px 12px; }
+  .padcol { display: flex; justify-content: center; margin: 0 0 12px; }
+  .padgrid { display: grid; grid-template-columns: 24px auto 24px; grid-template-rows: 24px auto 24px; gap: 6px;
+    align-items: center; justify-items: center; }
+  .pl { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text2);
+    letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+  .pl i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .pl.top { grid-column: 2; grid-row: 1; } .pl.bottom { grid-column: 2; grid-row: 3; }
+  .pl.left { grid-column: 1; grid-row: 2; writing-mode: vertical-rl; transform: rotate(180deg); }
+  .pl.right { grid-column: 3; grid-row: 2; writing-mode: vertical-rl; }
+  .pl .g { background: #5bd46c; } .pl .p { background: #e765d6; } .pl .c { background: #7fa8ff; } .pl .w { background: #ffb070; }
+  #pad { grid-column: 2; grid-row: 2; display: block; width: 280px; height: 280px; border-radius: 8px; touch-action: none;
+    cursor: crosshair; box-shadow: 0 0 0 1px var(--stroke-strong), var(--shadow); -webkit-user-select: none; user-select: none; }
+  .nudge { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); grid-template-areas: "l u r d w"; gap: 8px; max-width: 420px; margin: 0 auto; }
+  .nudge .btn { padding: 8px 4px; font-size: 15px; }
+  .nudge .n-l { grid-area: l; } .nudge .n-u { grid-area: u; } .nudge .n-r { grid-area: r; font-size: 14px; } .nudge .n-d { grid-area: d; } .nudge .n-w { grid-area: w; }
+  .padval { text-align: center; font-size: 13px; color: var(--text2); margin: 10px 0 0; font-variant-numeric: tabular-nums; }
+  .eye-actions { position: fixed; z-index: 10; left: 0; right: 0; bottom: 0; background: var(--bg); border-top: 1px solid var(--divider);
+    padding: 10px max(16px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+  .eye-actions .btn { max-width: 608px; margin: 0 auto; }
+  body[data-view="vEye"] main { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+
+  .swatches { display: flex; justify-content: space-between; gap: 4px; }
+  .swatches button { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 4px 0;
+    border: 0; border-radius: 8px; background: none; color: var(--text2); font-size: 12px; cursor: pointer; touch-action: manipulation; }
+  .swatches button i { width: 44px; height: 44px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .25); }
+  .swatches button.on { color: var(--text); font-weight: 600; }
+  .swatches button.on i { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--accent); }
+  .ab { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .ab button { min-height: 92px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    border-radius: 8px; border: 1px solid var(--ctrl-stroke); border-bottom-color: var(--ctrl-stroke-b); background: var(--ctrl);
+    color: var(--text); cursor: pointer; touch-action: manipulation; }
+  .ab button b { font-size: 32px; line-height: 1; font-weight: 600; }
+  .ab button span { font-size: 13px; color: var(--text2); }
+  .ab button.on { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+  .ab button.on span { color: inherit; opacity: .8; }
+  .votes3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .votes3 .btn { padding: 8px 6px; font-size: 14px; }
+
+  .swatches { max-width: 420px; margin: 0 auto; }
+  @media (orientation: landscape) and (min-width: 560px) {
+    body[data-view="vEye"] main, body[data-view="vEye"] .appbar { max-width: 980px; }
+    body[data-view="vEye"] main { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+    #vEye.colors .eye-bottom { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 28px; align-items: start; }
+    #vEye.colors #eyeColorsPart { display: contents; }
+    #vEye.colors .ab-left { grid-column: 1; grid-row: 1 / span 2; }
+    #vEye.colors .ab-right { grid-column: 2; grid-row: 1; }
+    #vEye.colors .ab-left > .sh:first-child, #vEye.colors .ab-right > .sh:first-child { margin-top: 4px; }
+    #vEye .eye-actions { position: static; padding: 12px 0 0; border: 0; background: none; }
+    #vEye.colors .eye-actions { grid-column: 2; grid-row: 2; }
+    #vEye:not(.colors) { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto 1fr;
+      grid-template-areas: "pad top" "pad bottom" "pad ."; column-gap: 24px; align-items: start; }
+    #vEye:not(.colors) .eye-top { grid-area: top; }
+    #vEye:not(.colors) .eye-bottom { grid-area: bottom; }
+    #vEye:not(.colors) .padcol { grid-area: pad; position: sticky; top: max(12px, env(safe-area-inset-top)); margin: 0; }
+    #vEye:not(.colors) .tabs { margin-top: 0; }
+  }
+  @media (orientation: landscape) and (max-height: 560px) {
+    .appbar { padding-top: max(8px, env(safe-area-inset-top)); }
+    .page-title { font-size: 22px; margin-top: 6px; }
+    body[data-view="vEye"] .appbar { display: none; }
+    body[data-view="vEye"] main { padding-top: max(12px, env(safe-area-inset-top)); }
+    #camSummary { display: none !important; }
+    .eyetip { font-size: 13px; margin-bottom: 10px; }
+    #vEye .tabs { margin: 0 0 10px; }
+    #vEye:not(.colors) #eyePadPart { display: flex; align-items: center; gap: 16px; }
+    #vEye .nudge { grid-template-columns: repeat(3, 48px); grid-template-areas: ". u ." "l r w" ". d ."; gap: 6px; margin: 0; }
+    #vEye .nudge #resetPad { font-size: 12px; padding: 4px 2px; }
+    #vEye .padval { margin: 0; text-align: left; }
+    #vEye .sh { margin: 12px 2px 8px; }
+    .swatches button i { width: 38px; height: 38px; }
+    .ab button { min-height: 64px; }
+    .ab button b { font-size: 26px; }
+  }
+
+  /* ------------------------------------------------------------------ done, dialog */
+  .done { text-align: center; padding: 32px 20px 28px; margin-top: 16px; }
+  .done-ic { width: 64px; height: 64px; margin: 0 auto 16px; border-radius: 50%; background: var(--ok); color: var(--on-sev);
+    display: flex; align-items: center; justify-content: center; }
+  .done-ic svg { width: 32px; height: 32px; }
+  .wbrows { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px 12px; align-items: center; margin-top: 10px; font-size: 13px; }
+  .wbrows .bar { height: 3px; border-radius: 2px; background: var(--track); overflow: hidden; }
+  .wbrows .bar i { display: block; height: 100%; }
+  .wbrows b { font-weight: 500; font-variant-numeric: tabular-nums; text-align: right; }
+  .done.cancelled .done-ic { background: var(--ctrl); color: var(--text); }
+  .done h1 { font-size: 24px; margin: 0 0 6px; font-weight: 600; }
+  .done p { margin: 0; color: var(--text2); }
+  dialog { border: 1px solid var(--stroke); border-radius: 8px; background: var(--card); color: var(--text); padding: 22px 20px 18px;
+    width: min(400px, calc(100vw - 32px)); box-shadow: 0 16px 48px rgba(0, 0, 0, .45); }
+  dialog::backdrop { background: rgba(0, 0, 0, .5); }
+  dialog h2 { margin: 0 0 6px; font-size: 20px; font-weight: 600; }
+  dialog p { margin: 0 0 18px; color: var(--text2); font-size: 14px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; }
+    .ring { animation-duration: 2.4s; }
+    .progress.indeterminate > i { animation: none; width: 100% !important; opacity: .5; }
+  }
 </style>
 </head>
-<body>
-<main>
-  <h1>RambiBox <small>LED color calibration</small></h1>
+<body data-view="vConnect">
+<svg class="defs" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="rbGlowH" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#25e0b0"/><stop offset=".3" stop-color="#ffd23f"/><stop offset=".55" stop-color="#ff7a3d"/>
+      <stop offset=".78" stop-color="#ff3d8b"/><stop offset="1" stop-color="#b65cff"/>
+    </linearGradient>
+    <linearGradient id="rbGlowV" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0"/><stop offset=".6" stop-color="#3d7bff" stop-opacity="0"/>
+      <stop offset="1" stop-color="#3d7bff" stop-opacity=".95"/>
+    </linearGradient>
+    <filter id="rbBlur" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="1.7"/></filter>
+    <symbol id="rbLogo" viewBox="0 0 32 32">
+      <rect x="3.6" y="4.2" width="24.8" height="18.6" rx="4.5" fill="url(#rbGlowH)" filter="url(#rbBlur)"/>
+      <rect x="3.6" y="4.2" width="24.8" height="18.6" rx="4.5" fill="url(#rbGlowV)" filter="url(#rbBlur)"/>
+      <rect x="6.1" y="6.7" width="19.8" height="13.6" rx="2.2" fill="#262a33" stroke="#4d5465" stroke-width="1.3"/>
+      <path d="M8 18.6 17.6 8.4H24v10.2Z" fill="#ffffff" opacity=".05"/>
+      <rect x="14.6" y="20.4" width="2.8" height="4.4" fill="#4d5465"/>
+      <rect x="10.4" y="24.3" width="11.2" height="2.3" rx="1.15" fill="#4d5465"/>
+    </symbol>
+    <symbol id="icCamera" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M4 7.5h3.2L9 5h6l1.8 2.5H20a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.6" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+    <symbol id="icVideo" viewBox="0 0 24 24"><rect x="2.8" y="6" width="13" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="m15.8 10.3 5.4-3v9.4l-5.4-3Z"/></symbol>
+    <symbol id="icCheck" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="icDownload" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m-4.5-4.5L12 15l4.5-4.5M5 19.5h14"/></symbol>
+  </defs>
+</svg>
+
+<header class="appbar" id="appbar">
+  <svg class="logo" aria-hidden="true"><use href="#rbLogo"/></svg>
+  <div class="brand"><b>RambiBox</b><span>LED color calibration</span></div>
+  <span class="pill" id="connPill" data-kind="wait"><i></i><span id="connText">Connecting…</span></span>
+</header>
+
+<main id="main">
+  <div id="errorCard" class="infobar error toast hidden" role="alert">
+    <span class="ib-ic" aria-hidden="true"></span><p id="errorMsg"></p>
+    <button id="errorClose" class="ib-close" type="button" aria-label="Dismiss">&#x2715;</button>
+  </div>
 
   <!-- connecting -->
-  <div id="vConnect" class="card"><span class="spinner"></span>Connecting to the PC…</div>
+  <section id="vConnect">
+    <div class="card row" style="margin-top:16px"><span class="ring"></span><span>Connecting to the PC…</span></div>
+  </section>
 
-  <!-- landing (plain http) -->
-  <div id="vChoose" class="hidden">
-    <div id="checking" class="card"><span class="spinner"></span>Checking whether the live camera is ready…</div>
+  <!-- landing (plain http): live camera setup or video -->
+  <section id="vChoose" class="hidden">
+    <div id="checking" class="card row" style="margin-top:16px"><span class="ring"></span><span>Checking whether the live camera is ready…</span></div>
 
-    <div id="setupCard" class="card hidden">
-      <h2>One-time setup for the live camera</h2>
-      <p class="muted">The live camera needs a secure page. RambiBox made its own certificate for this PC; your phone needs to trust it once.
+    <div id="setupCard" class="hidden">
+      <h1 class="page-title">One-time setup</h1>
+      <p class="page-sub">The live camera needs a secure page. RambiBox made its own certificate for this PC; your phone needs to trust it once.
         It only works on your home network (private addresses) and can be removed any time in Settings → General → VPN &amp; Device Management.</p>
-      <p class="msg hidden" id="trustDiag"></p>
-      <ol class="steps-small" id="setupSteps">
-        <li><a id="profileBtn" class="btn" href="#">Download the certificate profile</a>
-          <span class="small" id="dlHintSafari">Tap <b>Allow</b> when Safari asks.</span>
-          <span class="small hidden" id="dlHintOther">Your browser saves it as a download: open the <b>Files</b> app → <b>Downloads</b> (or the browser's downloads list) and tap <b>RambiBox</b>. If that doesn't work, open <b>Safari</b> and type
-            <input id="shortUrl" class="url" readonly value=""> <button id="copyLink" class="secondary">Copy</button></span></li>
-        <li>Open <b>Settings</b> → <b>Profile Downloaded</b> (near the top) → <b>Install</b> → enter your passcode → <b>Install</b>.</li>
-        <li><b>Important:</b> Settings → <b>General</b> → <b>About</b> → scroll all the way down → <b>Certificate Trust Settings</b> → turn <b>on</b> “<span id="caName">RambiBox Local CA</span>”. Installing alone is not enough.</li>
-        <li>Come back here. The page continues by itself — or tap the button below.</li>
+      <div class="infobar hidden" id="trustDiag" role="status"><span class="ib-ic" aria-hidden="true"></span><p id="trustDiagText"></p></div>
+      <ol class="steps card" id="setupSteps">
+        <li>
+          <div class="st-t">Download the certificate profile</div>
+          <a id="profileBtn" class="btn primary block" href="#"><svg aria-hidden="true"><use href="#icDownload"/></svg>Download profile</a>
+          <p class="st-d" id="dlHintSafari">Tap <b>Allow</b> when Safari asks.</p>
+          <div class="st-d hidden" id="dlHintOther">Your browser saves it as a download: open the <b>Files</b> app → <b>Downloads</b> (or the browser's downloads list) and tap <b>RambiBox</b>. If that doesn't work, open <b>Safari</b> and type
+            <div class="copyrow"><input id="shortUrl" class="url" readonly value="" aria-label="Short address of the certificate profile"><button id="copyLink" class="btn" type="button">Copy</button></div>
+          </div>
+        </li>
+        <li>
+          <div class="st-t">Install it</div>
+          <p class="st-d">Open <b>Settings</b> → <b>Profile Downloaded</b> (near the top) → <b>Install</b> → enter your passcode → <b>Install</b>.</p>
+        </li>
+        <li>
+          <div class="st-t">Turn on full trust</div>
+          <p class="st-d"><b>Important:</b> Settings → <b>General</b> → <b>About</b> → scroll all the way down → <b>Certificate Trust Settings</b> → turn <b>on</b> “<span id="caName">RambiBox Local CA</span>”. Installing alone is not enough.</p>
+        </li>
+        <li>
+          <div class="st-t">Come back here</div>
+          <p class="st-d">The page continues by itself — or tap the button below.</p>
+        </li>
       </ol>
-      <a id="goSecure" class="btn" href="#">I turned on full trust — continue</a>
+      <a id="goSecure" class="btn primary block lg" href="#">I turned on full trust — continue</a>
       <p class="small" id="braveHint">If Brave shows a certificate warning, tap <b>Show details</b> → <b>Visit this website</b> — the camera works either way.</p>
-      <p class="muted" id="waitTrust"><span class="spinner"></span>Waiting for the certificate…</p>
+      <p class="waiting" id="waitTrust" role="status"><span class="ring sm"></span>Waiting for the certificate…</p>
     </div>
 
-    <div id="noLiveCard" class="card hidden">
-      <p class="msg warn" id="noLiveMsg"></p>
-    </div>
+    <div id="noLiveCard" class="infobar warning hidden" style="margin-top:16px" role="status"><span class="ib-ic" aria-hidden="true"></span><p id="noLiveMsg"></p></div>
 
-    <div id="videoOffer" class="card hidden">
-      <h2>No setup? Use a video instead</h2>
-      <p class="muted">Record a ~25 second video of the screen while the PC shows a color loop. Works without any setup — the live camera is just more convenient.</p>
-      <button id="useVideo" class="secondary">Use video instead (no setup)</button>
+    <div id="videoOffer" class="hidden">
+      <h2 class="sh">No setup?</h2>
+      <div class="card setting">
+        <svg class="ic" aria-hidden="true"><use href="#icVideo"/></svg>
+        <div class="txt"><div class="t">Use a video instead</div>
+          <div class="d">Record a ~25 second video of the screen while the PC shows a color loop. Works without any setup — the live camera is just more convenient.</div></div>
+        <button id="useVideo" class="btn" type="button">Use video</button>
+      </div>
     </div>
-    <button id="skipCam1" class="link">Skip the camera — fine-tune by eye only</button>
-  </div>
+    <div class="links"><button id="skipCam1" class="btn link" type="button">Skip the camera — fine-tune by eye only</button></div>
+  </section>
 
   <!-- live camera (https) -->
-  <div id="vLive" class="hidden">
-    <div class="card">
-      <div id="liveIntro">
-        <ol class="steps-small">
-          <li>Turn off the room lights if you can.</li>
-          <li>Stand 1.5–2 m in front of the screen so the <b>whole screen and some wall around it</b> are visible. Portrait or landscape both work.</li>
-          <li>Hold the phone steady. The PC changes colors and adjusts the screen brightness for your camera by itself; just keep pointing at it.</li>
-        </ol>
-        <button id="startCam">Start camera</button>
+  <section id="vLive" class="hidden">
+    <div id="liveIntro">
+      <h1 class="page-title">Live camera</h1>
+      <p class="page-sub">The PC shows color patterns while your phone's camera compares the LED glow with the screen. Takes about two minutes.</p>
+      <ol class="steps card">
+        <li><div class="st-t">Dim the room</div><p class="st-d">Turn off the room lights if you can.</p></li>
+        <li><div class="st-t">Frame the whole screen</div><p class="st-d">Stand 1.5–2 m in front of the screen so the <b>whole screen and some wall around it</b> are visible. Portrait or landscape both work.</p></li>
+        <li><div class="st-t">Hold steady</div><p class="st-d">The PC changes colors and adjusts the screen brightness for your camera by itself; just keep pointing at it.</p></li>
+      </ol>
+      <button id="startCam" class="btn primary block lg" type="button"><svg aria-hidden="true"><use href="#icCamera"/></svg>Start camera</button>
+      <div class="links">
+        <button id="toVideo" class="btn link" type="button">Camera trouble? Use a video instead</button>
+        <button id="skipCam2" class="btn link" type="button">Skip the camera — fine-tune by eye only</button>
       </div>
-      <div id="liveRun" class="hidden">
-        <div class="row" style="align-items:baseline">
-          <h2 id="liveStep" style="margin:0">Starting…</h2>
-          <div id="liveErr" class="big" style="text-align:right;flex:0 0 auto"></div>
-        </div>
-        <div class="bar"><i id="liveBar"></i></div>
-        <p class="muted" id="liveNote"></p>
-        <ul class="hints" id="liveHints"></ul>
-        <p class="small" id="liveStatus"></p>
-        <button id="skipStep" class="secondary">Skip this step</button>
-        <p class="small warn hidden" id="shieldsHint">Brave Shields add noise to camera images. For best accuracy turn off Shields for this page (lion icon in the address bar). Calibration continues anyway.</p>
-      </div>
-      <div class="camwrap hidden" id="camWrap">
-        <video id="cam" playsinline muted autoplay></video>
-        <canvas id="overlay"></canvas>
-      </div>
-      <p class="small" id="camLegend">Blue = screen reference, green = LED glow, red = not usable.</p>
     </div>
-    <button id="toVideo" class="link">Camera trouble? Use a video instead</button>
-    <button id="skipCam2" class="link">Skip the camera — fine-tune by eye only</button>
-  </div>
+
+    <div id="liveRun" class="liverun hidden">
+      <div class="livehead">
+        <div class="lh-row">
+          <svg class="logo" aria-hidden="true"><use href="#rbLogo"/></svg>
+          <div class="lh-title"><h2 id="liveStep" aria-live="polite">Starting…</h2><span id="liveCount"></span></div>
+          <div id="liveErr" class="errbox hidden" role="status"><b id="liveErrNum"></b><span id="liveErrLbl">color difference</span></div>
+        </div>
+        <div class="progress" role="progressbar" aria-label="Calibration progress" aria-valuemin="0" aria-valuemax="100" id="liveProg"><i id="liveBar"></i></div>
+      </div>
+      <div class="stage" id="stage">
+        <div class="camwrap" id="camWrap">
+          <video id="cam" playsinline muted autoplay></video>
+          <canvas id="overlay" aria-hidden="true"></canvas>
+        </div>
+        <div class="legend" id="camLegend" aria-label="Overlay colors">
+          <span><i class="scr"></i>Screen</span><span><i class="glow"></i>LED glow</span><span><i class="ref"></i>Reference</span><span><i class="bad"></i>Not usable</span>
+        </div>
+      </div>
+      <div class="livepanel">
+        <p class="note" id="liveNote" aria-live="polite"></p>
+        <ul class="hints" id="liveHints" aria-live="polite"></ul>
+        <p class="small" id="liveStatus"></p>
+        <div class="infobar warning hidden" id="shieldsHint"><span class="ib-ic" aria-hidden="true"></span><p>Brave Shields add noise to camera images. For best accuracy turn off Shields for this page (lion icon in the address bar). Calibration continues anyway.</p></div>
+        <div class="links">
+          <button id="toVideoRun" class="btn link" type="button">Use a video instead</button>
+          <button id="skipCamRun" class="btn link" type="button">Skip the camera</button>
+        </div>
+      </div>
+      <div class="actionbar">
+        <button id="skipStep" class="btn" type="button">Skip this step</button>
+        <button id="cancelLive" class="btn subtle" type="button">Cancel</button>
+      </div>
+    </div>
+  </section>
 
   <!-- video fallback -->
-  <div id="vVideo" class="hidden">
-    <div class="card">
-      <h2>Video calibration</h2>
-      <ol class="steps-small">
-        <li>Turn off the room lights if you can.</li>
-        <li>Tap <b>Record video</b>: the PC starts a color loop and your camera opens.</li>
-        <li>Film the <b>whole screen with the glow around it</b>, hold still and record at least <b id="minSecs">25</b> seconds (the PC shows the loop time).</li>
-        <li>Stop, then tap <b>Use Video</b>. The phone extracts frames and sends them to the PC.</li>
-      </ol>
-      <label id="recBtn" class="btn" for="vfile">Record video</label>
-      <input id="vfile" type="file" accept="video/*" capture="environment">
-      <p class="small">Tip: if the result looks off, set Settings → Camera → Record Video → HDR Video off.</p>
-      <div id="vProg" class="hidden">
-        <div class="bar"><i id="vBar"></i></div>
-        <p class="muted" id="vNote"></p>
-      </div>
-      <p class="msg bad hidden" id="vErr"></p>
+  <section id="vVideo" class="hidden">
+    <h1 class="page-title">Video calibration</h1>
+    <p class="page-sub">Works without any setup: film the screen while the PC plays a color loop.</p>
+    <ol class="steps card">
+      <li><div class="st-t">Dim the room</div><p class="st-d">Turn off the room lights if you can.</p></li>
+      <li><div class="st-t">Record</div><p class="st-d">Tap <b>Record video</b>: the PC starts a color loop and your camera opens.</p></li>
+      <li><div class="st-t">Film the screen and the glow</div><p class="st-d">Keep the <b>whole screen with the glow around it</b> in view, hold still and record at least <b id="minSecs">25</b> seconds (the PC shows the loop time).</p></li>
+      <li><div class="st-t">Use the video</div><p class="st-d">Stop, then tap <b>Use Video</b>. The phone extracts frames and sends them to the PC.</p></li>
+    </ol>
+    <label id="recBtn" class="btn primary block lg" for="vfile"><svg aria-hidden="true"><use href="#icVideo"/></svg>Record video</label>
+    <input id="vfile" type="file" accept="video/*" capture="environment">
+    <div id="vProg" class="card hidden" aria-live="polite">
+      <div class="vp-head"><span class="ring sm" id="vSpin"></span><b id="vPhase">Opening the video…</b><span class="vp-pct" id="vPct"></span></div>
+      <div class="progress" id="vBarBox"><i id="vBar"></i></div>
+      <p class="small" id="vNote"></p>
     </div>
-    <button id="skipCam3" class="link">Skip the camera — fine-tune by eye only</button>
-  </div>
+    <div class="infobar error hidden" id="vErr" role="alert" style="margin-top:12px"><span class="ib-ic" aria-hidden="true"></span><p id="vErrText"></p></div>
+    <div class="infobar" style="margin-top:12px"><span class="ib-ic" aria-hidden="true"></span><p>Tip: if the result looks off, set Settings → Camera → Record Video → HDR Video off.</p></div>
+    <div class="links"><button id="skipCam3" class="btn link" type="button">Skip the camera — fine-tune by eye only</button></div>
+  </section>
 
   <!-- eye fine-tune -->
-  <div id="vEye" class="hidden">
-    <div class="card">
-      <p class="msg good hidden" id="camSummary"></p>
-      <div class="tabs">
-        <button id="tabWhite">White</button>
-        <button id="tabDark">Dark tones</button>
-        <button id="tabColors">Colors A/B</button>
+  <section id="vEye" class="hidden">
+    <div class="eye-top">
+      <div class="infobar success hidden" id="camSummary"><span class="ib-ic" aria-hidden="true"></span><p id="camSummaryText"></p>
+        <button id="camSummaryClose" class="ib-close" type="button" aria-label="Dismiss">&#x2715;</button></div>
+      <div class="tabs" role="tablist" aria-label="Fine-tune step">
+        <button id="tabWhite" role="tab" type="button">White</button>
+        <button id="tabDark" role="tab" type="button">Dark tones</button>
+        <button id="tabColors" role="tab" type="button">Colors A/B</button>
       </div>
+      <p class="eyetip" id="eyeTip"></p>
+    </div>
+    <div class="padcol" id="padCol">
+      <div class="padgrid" id="padArea">
+        <span class="pl top"><i class="g"></i>Greener</span>
+        <span class="pl left"><i class="c"></i>Cooler</span>
+        <canvas id="pad" width="840" height="840" tabindex="0" role="img"
+                aria-label="Tint pad: drag left for cooler, right for warmer, up for greener, down for pinker. Arrow keys nudge."></canvas>
+        <span class="pl right"><i class="w"></i>Warmer</span>
+        <span class="pl bottom"><i class="p"></i>Pinker</span>
+      </div>
+    </div>
+    <div class="eye-bottom">
       <div id="eyePadPart">
-        <p class="muted" id="eyeTip">Look at the glow on the wall and the white edge of the screen, not at the phone. Let your eyes adapt for a few seconds, then drag the dot until both whites look the same.</p>
-        <div class="padwrap"><canvas id="pad" width="680" height="680"></canvas></div>
         <div class="nudge">
-          <span></span><button data-n="0,-1">▲ greener</button><span></span>
-          <button data-n="-1,0">◀ cooler</button><button id="resetPad">Reset</button><button data-n="1,0">warmer ▶</button>
-          <span></span><button data-n="0,1">▼ pinker</button><span></span>
+          <button class="btn n-l" type="button" data-n="-1,0" aria-label="Cooler">◀</button>
+          <button class="btn n-u" type="button" data-n="0,-1" aria-label="Greener">▲</button>
+          <button id="resetPad" class="btn n-r" type="button">Reset</button>
+          <button class="btn n-d" type="button" data-n="0,1" aria-label="Pinker">▼</button>
+          <button class="btn n-w" type="button" data-n="1,0" aria-label="Warmer">▶</button>
         </div>
-        <p class="small" id="padVal"></p>
+        <p class="padval" id="padVal" aria-live="polite"></p>
       </div>
       <div id="eyeColorsPart" class="hidden">
-        <p class="muted">The screen edge and the LEDs show the same color. <b>A</b> = with the measured color correction, <b>B</b> = without. Tap A and B a few times and judge which glow matches the screen edge better.</p>
+        <div class="ab-left">
+        <h2 class="sh">Test color</h2>
         <div class="swatches" id="swatches"></div>
-        <div class="ab"><button id="showA">A</button><button id="showB">B</button></div>
-        <div class="row">
-          <button id="voteA" class="secondary">A is closer</button>
-          <button id="voteSame" class="secondary">Same</button>
-          <button id="voteB" class="secondary">B is closer</button>
+        <h2 class="sh">Show on the LEDs</h2>
+        <div class="ab">
+          <button id="showA" type="button" aria-pressed="false"><b>A</b><span>with correction</span></button>
+          <button id="showB" type="button" aria-pressed="false"><b>B</b><span>without</span></button>
         </div>
-        <div class="row" style="align-items:center">
-          <button id="lessM" class="secondary">Less</button>
-          <p class="muted" style="text-align:center;margin:10px 0 0" id="strength"></p>
-          <button id="moreM" class="secondary">More</button>
+        </div>
+        <div class="ab-right">
+        <h2 class="sh">Which glow matches the screen edge better?</h2>
+        <div class="votes3">
+          <button id="voteA" class="btn" type="button">A is closer</button>
+          <button id="voteSame" class="btn" type="button">Same</button>
+          <button id="voteB" class="btn" type="button">B is closer</button>
         </div>
         <p class="small" id="votes"></p>
+        <div class="card setting" style="margin-top:16px">
+          <div class="txt"><div class="t">Correction strength</div><div class="d" id="strength"></div></div>
+          <div class="ctl"><button id="lessM" class="btn" type="button" aria-label="Less correction">−</button><button id="moreM" class="btn" type="button" aria-label="More correction">+</button></div>
+        </div>
+        </div>
       </div>
-      <button id="eyeNext">Next</button>
+      <div class="eye-actions"><button id="eyeNext" class="btn primary block lg" type="button">Next</button></div>
     </div>
-  </div>
+  </section>
 
-  <div id="vDone" class="card hidden">
-    <p class="msg good"><b>All done!</b> The new LED colors are saved. You can close this page.</p>
-  </div>
+  <section id="vDone" class="hidden">
+    <div class="card done" id="doneCard">
+      <div class="done-ic" aria-hidden="true"><svg><use href="#icCheck"/></svg></div>
+      <h1 id="doneTitle">All done!</h1>
+      <p id="doneMsg">The new LED colors are saved. You can close this page.</p>
+    </div>
+    <div id="doneResult" class="hidden">
+      <h2 class="sh">Result</h2>
+      <div class="card">
+        <div class="t">White balance</div>
+        <div class="wbrows" id="wbRows"></div>
+      </div>
+    </div>
+  </section>
 
-  <div id="errorCard" class="card hidden"><p class="msg bad" id="errorMsg"></p></div>
-  <button id="cancelBtn" class="link">Cancel calibration (restore previous colors)</button>
+  <div class="links"><button id="cancelBtn" class="btn link muted" type="button">Cancel calibration (restore previous colors)</button></div>
 </main>
+
+<dialog id="cancelDlg" aria-labelledby="dlgTitle">
+  <h2 id="dlgTitle">Cancel the calibration?</h2>
+  <p>The previous LED colors are restored.</p>
+  <div class="btnrow"><button id="dlgNo" class="btn" type="button">Keep going</button><button id="dlgYes" class="btn primary" type="button">Cancel calibration</button></div>
+</dialog>
 
 <script>
 (function () {
   'use strict';
+  var qs = new URLSearchParams(location.search);
+  var demo = qs.get('demo') || '';               // ?demo=<view>: mock state, synthetic camera, no network
+  var themeParam = qs.get('theme');              // ?theme=light|dark overrides the system theme
+  if (themeParam === 'light' || themeParam === 'dark') document.documentElement.setAttribute('data-theme', themeParam);
   var base = location.pathname.replace(/\/+$/, '');
   var secure = location.protocol === 'https:';
   var $ = function (id) { return document.getElementById(id); };
   var state = null, view = '', polling = false, liveRunning = false, stream = null, wakeLock = null;
   var userChoseVideo = false;
+  var mqLand = window.matchMedia('(orientation: landscape)');
 
   function show(id, on) { $(id).classList.toggle('hidden', !on); }
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   function setView(v) {
     if (view === v) return;
     view = v;
+    document.body.setAttribute('data-view', v);
     ['vConnect', 'vChoose', 'vLive', 'vVideo', 'vEye', 'vDone'].forEach(function (id) { show(id, id === v); });
     show('cancelBtn', v !== 'vDone');
+    if (v !== 'vLive') setRunUI(false);
+    window.scrollTo(0, 0);
   }
   function fail(text) { show('errorCard', !!text); $('errorMsg').textContent = text || ''; }
+  $('errorClose').addEventListener('click', function () { fail(''); });
+
+  var connKind = '';
+  function setConn(kind, text) {
+    if (connKind === kind) return;
+    connKind = kind;
+    $('connPill').setAttribute('data-kind', kind);
+    $('connText').textContent = text;
+  }
 
   function api(path, opts) {
+    if (demo) return demoApi(path, opts);
     opts = Object.assign({ cache: 'no-store' }, opts || {});
     return fetch(base + path, opts).then(function (r) {
       return r.json().catch(function () { throw new Error('HTTP ' + r.status); }).then(function (j) {
         if (j && j.state) state = j.state;
         if (r.status === 403) throw new Error(j.message || 'Not allowed');
+        setConn('ok', 'Connected');
         return j;
       });
     });
@@ -247,13 +651,13 @@
   function route() {
     if (!state) return;
     fail('');
-    if (state.finished || state.mode === 'finished') { stopCamera(); setView('vDone'); return; }
+    if (state.finished || state.mode === 'finished') { stopCamera(); setView('vDone'); renderDone(); return; }
     if (state.mode === 'eye') { stopCamera(); setView('vEye'); renderEye(); return; }
     if (state.mode === 'video') { setView('vVideo'); renderVideo(); return; }
     if (state.mode === 'live') {
-      if (!secure && state.tls && state.tls.url) { location.replace(state.tls.url); return; }
+      if (!secure && !demo && state.tls && state.tls.url) { location.replace(state.tls.url); return; }
       setView('vLive');
-      if (!liveRunning) { show('liveIntro', true); }
+      if (!liveRunning) setRunUI(false);
       return;
     }
     // choose
@@ -269,7 +673,7 @@
     (function tick() {
       if (liveRunning || videoBusy) { setTimeout(tick, 1500); return; }
       api('/state').then(function () { fails = 0; route(); })
-        .catch(function (e) { if (++fails > 3) fail('Lost connection to the PC. Is the calibration still running there? (' + e.message + ')'); })
+        .catch(function (e) { if (++fails > 3) { setConn('bad', 'Offline'); fail('Lost connection to the PC. Is the calibration still running there? (' + e.message + ')'); } })
         .then(function () { if (!state || !(state.finished || state.mode === 'finished')) setTimeout(tick, 1500); });
     })();
   }
@@ -292,6 +696,7 @@
 
   var landingRunning = false;
   function landing() {
+    if (demo) { show('checking', false); showSetup(); show('videoOffer', true); return; }
     if (landingRunning) return;
     landingRunning = true;
     show('checking', true); show('setupCard', false); show('noLiveCard', false); show('videoOffer', false);
@@ -333,8 +738,8 @@
   function updateTrustDiag() {
     var t = state && state.tls, el = $('trustDiag');
     if (!t || !el) return;
-    var msg = '', cls = 'msg';
-    if (t.reached) { msg = 'Your phone trusts the certificate — continuing…'; cls = 'msg good'; }
+    var msg = '', cls = 'infobar';
+    if (t.reached) { msg = 'Your phone trusts the certificate — continuing…'; cls = 'infobar success'; }
     else if (t.failures > 0) {
       var unknownCa = /UnknownCA/i.test(t.lastError || '');
       msg = unknownCa
@@ -342,9 +747,9 @@
           (state.caName || 'RambiBox Local CA') + '”. Then tap the button below.'
         : 'Your phone reached the PC but rejected its certificate (' + (t.lastError || 'unknown reason') +
           '). Try the button below; if it keeps failing, use the video option.';
-      cls = 'msg warn';
+      cls = 'infobar warning';
     }
-    el.textContent = msg; el.className = cls; show('trustDiag', !!msg);
+    $('trustDiagText').textContent = msg; el.className = cls; show('trustDiag', !!msg);
   }
   // Copy without the Clipboard API (it only exists on secure pages): select the input and use execCommand.
   $('copyLink').addEventListener('click', function () {
@@ -356,20 +761,31 @@
     $('copyLink').textContent = ok ? 'Copied — paste it in Safari' : 'Long-press the address to copy it';
   });
   $('useVideo').addEventListener('click', function () { userChoseVideo = true; setView('vVideo'); renderVideo(); });
-  $('toVideo').addEventListener('click', function () {
-    stopCamera(); // the video routes work on this (secure) page as well
-    userChoseVideo = true; setView('vVideo'); renderVideo();
+  ['toVideo', 'toVideoRun'].forEach(function (id) {
+    $(id).addEventListener('click', function () {
+      stopCamera(); // the video routes work on this (secure) page as well
+      userChoseVideo = true; setView('vVideo'); renderVideo();
+    });
   });
-  ['skipCam1', 'skipCam2', 'skipCam3'].forEach(function (id) {
+  ['skipCam1', 'skipCam2', 'skipCam3', 'skipCamRun'].forEach(function (id) {
     $(id).addEventListener('click', function () { stopCamera(); post('/skip').then(route).catch(function (e) { fail(e.message); }); });
   });
 
   // ---------------------------------------------------------------- live camera
-  var cam = $('cam'), overlay = $('overlay'), grabCanvas = document.createElement('canvas');
-  var lastOverlay = null, lockedWb = false, farbleChecked = false;
+  var cam = $('cam'), overlay = $('overlay'), camWrap = $('camWrap'), stage = $('stage'), grabCanvas = document.createElement('canvas');
+  var lastOverlay = null, lockedWb = false, farbleChecked = false, demoCam = null;
+  var fitW = 0, fitH = 0;
+
+  // Full-screen camera layout on/off (fixed overlay: no page scrolling or bounce while pointing the phone).
+  function setRunUI(on) {
+    show('liveRun', on); show('liveIntro', !on);
+    document.documentElement.classList.toggle('lock', on);
+    if (on) { fitW = fitH = 0; requestAnimationFrame(fitCamera); }
+  }
 
   $('startCam').addEventListener('click', function () {
     fail('');
+    if (demo) { demoStartLive(); return; }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { fail('This browser has no camera access on this page. Use the video instead.'); return; }
     $('startCam').disabled = true;
     navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false })
@@ -380,10 +796,12 @@
       })
       .then(function () { return post('/live'); })
       .then(function () {
-        show('liveIntro', false); show('liveRun', true); show('camWrap', true);
+        $('startCam').disabled = false;
+        setRunUI(true);
         requestWakeLock();
         checkFarbling();
         liveRunning = true;
+        renderLiveHead();
         liveLoop();
       })
       .catch(function (e) {
@@ -428,17 +846,40 @@
     });
   }
 
+  function setText(id, text) { var el = $(id); if (el.textContent !== text) el.textContent = text; }
+  function renderLiveHead() {
+    var s = state || {};
+    setText('liveStep', s.stepTitle || 'Measuring');
+    setText('liveCount', s.stepCount ? 'Step ' + (s.stepIndex + 1) + ' of ' + s.stepCount : '');
+    var pct = Math.round((s.progress || 0) * 100);
+    $('liveBar').style.width = pct + '%';
+    $('liveProg').setAttribute('aria-valuenow', String(pct));
+    var showErr = (s.step === 'white' || s.step === 'white2') && typeof s.errorPercent === 'number';
+    show('liveErr', showErr);
+    if (showErr) {
+      var num = $('liveErrNum');
+      num.textContent = s.errorPercent.toFixed(1);
+      var u = document.createElement('small'); u.textContent = ' %'; num.appendChild(u);
+      $('liveErr').setAttribute('data-level', s.errorPercent < s.targetPercent ? 'ok' : s.errorPercent < 3 * s.targetPercent ? 'warn' : 'bad');
+      setText('liveErrLbl', 'target < ' + (s.targetPercent || 2) + ' %');
+    }
+  }
+
   function onFrame(r) {
     if (r.state) state = r.state;
     var s = state || {};
-    $('liveStep').textContent = (s.stepTitle || 'Measuring') + (s.stepCount ? '  (' + (s.stepIndex + 1) + '/' + s.stepCount + ')' : '');
-    $('liveBar').style.width = Math.round((s.progress || 0) * 100) + '%';
-    $('liveNote').textContent = r.note || r.message || s.instruction || '';
-    var showErr = (s.step === 'white' || s.step === 'white2') && typeof s.errorPercent === 'number';
-    $('liveErr').innerHTML = showErr ? s.errorPercent.toFixed(1) + '<small> %</small>' : '';
-    $('liveErr').style.color = showErr ? (s.errorPercent < s.targetPercent ? 'var(--ok)' : s.errorPercent < 3 * s.targetPercent ? 'var(--warn)' : 'var(--bad)') : '';
-    var ul = $('liveHints'); ul.textContent = '';
-    (r.hints || []).forEach(function (h) { var li = document.createElement('li'); li.textContent = h; ul.appendChild(li); });
+    renderLiveHead();
+    setText('liveNote', r.note || r.message || s.instruction || '');
+    var hints = r.hints || [], ul = $('liveHints'), key = hints.join('\n');
+    if (ul.getAttribute('data-key') !== key) {
+      ul.setAttribute('data-key', key);
+      ul.textContent = '';
+      hints.forEach(function (h) {
+        var li = document.createElement('li'), ic = document.createElement('span'), p = document.createElement('p');
+        li.className = 'infobar warning'; ic.className = 'ib-ic'; ic.setAttribute('aria-hidden', 'true'); p.textContent = h;
+        li.appendChild(ic); li.appendChild(p); ul.appendChild(li);
+      });
+    }
     renderLiveStatus();
     if (r.overlay) { lastOverlay = r.overlay; drawOverlay(); }
     if (r.overlay && r.overlay.corners && r.used) tryLockWhiteBalance();
@@ -450,7 +891,7 @@
     if (typeof s.screenGain === 'number') parts.push('Screen level for the camera: ' + Math.max(1, Math.round(s.screenGain * 100)) + ' %');
     if (typeof s.ledScale === 'number' && s.ledScale < 0.999) parts.push('LEDs at ' + Math.round(s.ledScale * 100) + ' %');
     if (s.stepTimeout > 0) parts.push('moves on after ' + Math.max(0, Math.ceil(s.stepTimeout - (s.stepSeconds || 0))) + ' s if it can’t measure');
-    $('liveStatus').textContent = parts.join(' · ');
+    setText('liveStatus', parts.join(' · '));
   }
   $('skipStep').addEventListener('click', function () {
     $('skipStep').disabled = true;
@@ -458,38 +899,58 @@
       $('skipStep').disabled = false;
       var n = (state && state.notes) || [];
       if (n.length) $('liveNote').textContent = n[n.length - 1];
-      $('liveStep').textContent = (state.stepTitle || 'Measuring') + (state.stepCount ? '  (' + (state.stepIndex + 1) + '/' + state.stepCount + ')' : '');
+      renderLiveHead();
       renderLiveStatus();
       if (state.mode !== 'live') { stopCamera(); route(); }
     }).catch(function (e) { $('skipStep').disabled = false; fail(e.message); });
   });
 
-  function drawOverlay() {
-    var o = lastOverlay, w = cam.clientWidth, h = cam.clientHeight;
-    var dpr = window.devicePixelRatio || 1;
+  // Size of the camera picture (demo: the synthetic frame).
+  function srcSize() { return demoCam ? [demoCam.width, demoCam.height] : [cam.videoWidth, cam.videoHeight]; }
+
+  // Fits the camera box (and the overlay canvas on top of it) to the drawn picture: object-fit contain inside the stage,
+  // so the overlay coordinates map exactly onto the video. Runs only on resize/rotation/new video size, not per frame.
+  function fitCamera() {
+    if ($('liveRun').classList.contains('hidden')) return;
+    var W = stage.clientWidth, H = stage.clientHeight, s = srcSize();
+    if (!W || !H) return;
+    var vw = s[0] || 16, vh = s[1] || 9;
+    var k = Math.min(W / vw, H / vh), w = Math.max(1, Math.floor(vw * k)), h = Math.max(1, Math.floor(vh * k));
+    if (w === fitW && h === fitH) return;
+    fitW = w; fitH = h;
+    camWrap.style.width = w + 'px'; camWrap.style.height = h + 'px';
+    var dpr = Math.min(3, window.devicePixelRatio || 1);
     overlay.width = Math.round(w * dpr); overlay.height = Math.round(h * dpr);
-    var ctx = overlay.getContext('2d');
-    ctx.clearRect(0, 0, overlay.width, overlay.height);
-    if (!o || !o.width) return;
-    var k = overlay.width / o.width, lw = Math.max(2, overlay.width / 300);
+    drawOverlay();
+  }
+  cam.addEventListener('loadedmetadata', fitCamera);
+  cam.addEventListener('resize', fitCamera); // videoWidth/videoHeight changed (phone turned)
+
+  function drawOverlay() {
+    var ctx = overlay.getContext('2d'), W = overlay.width, H = overlay.height;
+    ctx.clearRect(0, 0, W, H);
+    var o = lastOverlay;
+    if (!o || !o.width || !o.height || !W || !H) return;
+    var s = srcSize();
+    if (s[0] && s[1] && Math.abs(o.width / o.height - s[0] / s[1]) > 0.03) return; // frame from before the phone turned
+    var kx = W / o.width, ky = H / o.height, lw = Math.max(2, W / 320);
     (o.regions || []).forEach(function (rg) {
-      poly(ctx, rg.points, k);
+      poly(ctx, rg.points, kx, ky);
       ctx.lineWidth = lw;
       var c = !rg.ok ? '255,93,93' : rg.kind === 'glow' ? '62,207,142' : rg.kind === 'ref' ? '255,181,71' : '79,140,255';
-      ctx.strokeStyle = 'rgb(' + c + ')'; ctx.fillStyle = 'rgba(' + c + ',.15)';
+      ctx.strokeStyle = 'rgb(' + c + ')'; ctx.fillStyle = 'rgba(' + c + ',.18)';
       ctx.fill(); ctx.stroke();
     });
     if (o.corners) {
-      poly(ctx, o.corners, k);
+      poly(ctx, o.corners, kx, ky);
       ctx.lineWidth = lw; ctx.strokeStyle = '#fff'; ctx.setLineDash([lw * 3, lw * 2]); ctx.stroke(); ctx.setLineDash([]);
     }
   }
-  function poly(ctx, pts, k) {
+  function poly(ctx, pts, kx, ky) {
     ctx.beginPath();
-    pts.forEach(function (p, i) { if (i) ctx.lineTo(p[0] * k, p[1] * k); else ctx.moveTo(p[0] * k, p[1] * k); });
+    pts.forEach(function (p, i) { if (i) ctx.lineTo(p[0] * kx, p[1] * ky); else ctx.moveTo(p[0] * kx, p[1] * ky); });
     ctx.closePath();
   }
-  window.addEventListener('resize', drawOverlay);
 
   function track() { return stream && stream.getVideoTracks ? stream.getVideoTracks()[0] : null; }
   // Each frame is normalized by the neutral reference squares, so auto exposure / white balance may keep running;
@@ -533,7 +994,7 @@
   }
   $('recBtn').addEventListener('click', function () {
     // start the color loop on the PC while the camera opens
-    $('vErr').classList.add('hidden');
+    show('vErr', false);
     post('/video/start').catch(function () {});
   });
   $('vfile').addEventListener('change', function (e) {
@@ -543,10 +1004,21 @@
     processVideo(f);
   });
 
+  // Progress of the frame extraction/upload; frac null = indeterminate (the PC is calculating).
+  function vProgress(phase, frac, detail) {
+    setText('vPhase', phase);
+    setText('vPct', frac == null ? '' : Math.round(frac * 100) + ' %');
+    $('vBar').style.width = frac == null ? '100%' : Math.round(frac * 100) + '%';
+    $('vBarBox').classList.toggle('indeterminate', frac == null);
+    if (detail !== undefined) setText('vNote', detail);
+  }
+  function setRecBusy(on) { $('recBtn').classList.toggle('is-busy', on); $('recBtn').setAttribute('aria-disabled', on ? 'true' : 'false'); }
+  function videoError(text) { show('vProg', false); $('vErrText').textContent = text; show('vErr', true); }
+
   function processVideo(file) {
     videoBusy = true;
-    show('vProg', true); $('vErr').classList.add('hidden');
-    $('recBtn').style.opacity = .5; $('recBtn').style.pointerEvents = 'none';
+    show('vProg', true); show('vErr', false);
+    setRecBusy(true);
     var v = document.createElement('video');
     v.muted = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.preload = 'auto';
     // in the document (but invisible): some iOS versions only decode frames of attached videos
@@ -556,8 +1028,8 @@
     v.src = url;
     var cleanup = function () { URL.revokeObjectURL(url); try { v.removeAttribute('src'); v.load(); v.remove(); } catch (e) { /* ignore */ } };
     var canvas = document.createElement('canvas');
-    var note = function (t) { $('vNote').textContent = t; };
-    note('Opening the video…');
+    var pcInfo = '';
+    vProgress('Opening the video…', 0, '');
     once(v, 'loadedmetadata', 15000).then(function () {
       // iOS decodes frames for drawing only after playback has started once
       return v.play().then(function () { v.pause(); }, function () {});
@@ -579,14 +1051,15 @@
         var q = first ? '?first=1' : ''; first = false;
         return post('/video/frames' + q, buf.buffer).then(function (r) {
           if (!r.ok) throw new Error(r.message || 'upload failed');
-          note('Sent ' + r.received + ' frames, ' + r.recognized + ' show the color loop…');
+          pcInfo = 'PC: ' + r.received + ' frames received, ' + r.recognized + ' show the color loop';
+          $('vNote').textContent = 'Frame ' + sent + ' of ' + times.length + ' · ' + pcInfo;
         });
       };
       var i = 0;
       var next = function () {
         if (i >= times.length) return flush();
         var t = times[i++];
-        $('vBar').style.width = Math.round(i / times.length * 100) + '%';
+        vProgress('Extracting and sending frames', i / times.length);
         return seek(v, t).then(function () {
           var w = v.videoWidth, h = v.videoHeight, s = Math.min(1, 1280 / Math.max(w, h));
           canvas.width = Math.round(w * s); canvas.height = Math.round(h * s);
@@ -595,27 +1068,25 @@
         }).then(function (b) { return b ? b.arrayBuffer() : null; }).then(function (ab) {
           if (ab) batch.push({ t: t, data: ab });
           sent++;
-          if (sent % 4 === 0) note('Reading frame ' + sent + ' of ' + times.length + '…');
+          if (sent % 4 === 0) $('vNote').textContent = 'Frame ' + sent + ' of ' + times.length + (pcInfo ? ' · ' + pcInfo : '');
           return batch.length >= 6 ? flush() : null;
         }).then(next);
       };
       return next();
     }).then(function () {
-      note('Calculating…');
+      vProgress('Calculating…', null, pcInfo);
       return post('/video/done');
     }).then(function (r) {
       cleanup();
       videoBusy = false;
-      $('recBtn').style.opacity = 1; $('recBtn').style.pointerEvents = 'auto';
-      if (!r.ok) { show('vProg', false); $('vErr').textContent = r.message || 'The video could not be used.'; $('vErr').classList.remove('hidden'); return; }
+      setRecBusy(false);
+      if (!r.ok) { videoError(r.message || 'The video could not be used.'); return; }
       route();
     }).catch(function (e) {
       cleanup();
       videoBusy = false;
-      $('recBtn').style.opacity = 1; $('recBtn').style.pointerEvents = 'auto';
-      show('vProg', false);
-      $('vErr').textContent = 'Video problem: ' + (e && e.message ? e.message : e) + '. Please try again.';
-      $('vErr').classList.remove('hidden');
+      setRecBusy(false);
+      videoError('Video problem: ' + (e && e.message ? e.message : e) + '. Please try again.');
     });
   }
   function once(el, ev, timeout) {
@@ -632,28 +1103,53 @@
   }
 
   // ---------------------------------------------------------------- eye fine-tune
-  var pad = $('pad'), dragging = false, padPos = { t: 0, m: 0 }, lastSent = 0, sendTimer = null, eyeStage = '';
+  var pad = $('pad'), padCol = $('padCol'), dragging = false, padPos = { t: 0, m: 0 }, lastSent = 0, sendTimer = null, eyeStage = '';
+  var padSize = 0, padRect = null, padRaf = 0;
+  var PAD_RANGE = 0.9; // the dot travels over 90 % of the pad's half-width
+  var summaryClosed = false;
+  $('camSummaryClose').addEventListener('click', function () { summaryClosed = true; show('camSummary', false); schedLayout(); });
   function renderEye() {
     var s = state, e = s.eye;
     requestWakeLock();
-    if (s.summary) { $('camSummary').textContent = s.summary; show('camSummary', true); }
+    if (s.summary && !summaryClosed) { $('camSummaryText').textContent = s.summary; show('camSummary', true); }
     if (e.stage !== eyeStage) {
       eyeStage = e.stage;
       padPos = e.stage === 'dark' ? { t: e.td, m: e.md } : { t: e.t, m: e.m };
     }
-    $('tabWhite').classList.toggle('on', e.stage === 'white');
-    $('tabDark').classList.toggle('on', e.stage === 'dark');
-    $('tabColors').classList.toggle('on', e.stage === 'colors');
+    [['tabWhite', 'white'], ['tabDark', 'dark'], ['tabColors', 'colors']].forEach(function (x) {
+      var on = e.stage === x[1];
+      $(x[0]).classList.toggle('on', on); $(x[0]).setAttribute('aria-selected', on ? 'true' : 'false');
+    });
     $('tabColors').disabled = !s.hasMatrix;
     var colors = e.stage === 'colors';
-    show('eyePadPart', !colors); show('eyeColorsPart', colors);
-    $('eyeTip').textContent = e.stage === 'dark'
-      ? 'Now the screen edge and the LEDs show a dark gray. Compare the dim glow with the gray edge and drag until the tint matches. White stays as it is.'
-      : 'Look at the glow on the wall and the white edge of the screen, not at the phone. Let your eyes adapt for a few seconds, then drag the dot until both whites look the same.';
+    $('vEye').classList.toggle('colors', colors);
+    document.body.classList.toggle('eye-colors', colors);
+    show('eyePadPart', !colors); show('eyeColorsPart', colors); show('padCol', !colors);
+    $('eyeTip').textContent = colors
+      ? 'The screen edge and the LEDs show the same color. A = with the measured color correction, B = without. Tap A and B a few times and judge which glow matches the screen edge better.'
+      : e.stage === 'dark'
+        ? 'Now the screen edge and the LEDs show a dark gray. Compare the dim glow with the gray edge and drag until the tint matches. White stays as it is.'
+        : 'Look at the glow on the wall and the white edge of the screen, not at the phone. Let your eyes adapt for a few seconds, then drag the dot until both whites look the same.';
     $('eyeNext').textContent = e.stage === 'white' ? 'Next: dark tones' : (e.stage === 'dark' && s.hasMatrix) ? 'Next: colors A/B' : 'Done — save';
-    if (colors) renderColors(); else drawPad();
+    if (colors) renderColors(); else { sizePad(); drawPad(); }
+  }
+
+  // Square pad as large as the viewport allows (labels around it), in portrait and landscape.
+  function sizePad() {
+    if (view !== 'vEye' || padCol.classList.contains('hidden')) return;
+    var land = mqLand.matches && window.innerWidth >= 560, gutters = 2 * (24 + 6);
+    var availW = land ? Math.min(window.innerWidth * 0.55, 620) : padCol.clientWidth;
+    var availH = land ? window.innerHeight - $('appbar').offsetHeight - 28 : window.innerHeight * 0.56;
+    var S = Math.floor(Math.max(160, Math.min(availW - gutters, availH - gutters, 560)));
+    if (S === padSize) return;
+    padSize = S;
+    pad.style.width = pad.style.height = S + 'px';
+    var px = Math.round(S * Math.min(3, window.devicePixelRatio || 1));
+    pad.width = pad.height = px;
+    drawPad();
   }
   function drawPad() {
+    padRaf = 0;
     var ctx = pad.getContext('2d'), W = pad.width, H = pad.height;
     var g = ctx.createLinearGradient(0, 0, W, 0);
     g.addColorStop(0, '#7fa8ff'); g.addColorStop(0.5, '#f4f4f4'); g.addColorStop(1, '#ffb070');
@@ -661,23 +1157,29 @@
     var g2 = ctx.createLinearGradient(0, 0, 0, H);
     g2.addColorStop(0, 'rgba(90,220,110,.55)'); g2.addColorStop(0.5, 'rgba(255,255,255,0)'); g2.addColorStop(1, 'rgba(240,90,220,.55)');
     ctx.fillStyle = g2; ctx.fillRect(0, 0, W, H);
-    ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 2;
+    var u = W / 340;
+    ctx.strokeStyle = 'rgba(0,0,0,.16)'; ctx.lineWidth = Math.max(1, u);
+    ctx.beginPath();
+    for (var q = 1; q < 4; q++) { if (q === 2) continue; ctx.moveTo(W * q / 4, 0); ctx.lineTo(W * q / 4, H); ctx.moveTo(0, H * q / 4); ctx.lineTo(W, H * q / 4); }
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = Math.max(1, 1.5 * u);
     ctx.beginPath(); ctx.moveTo(W / 2, 0); ctx.lineTo(W / 2, H); ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.stroke();
-    ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.font = '600 26px system-ui'; ctx.textAlign = 'center';
-    ctx.fillText('greener', W / 2, 34); ctx.fillText('pinker', W / 2, H - 16);
-    ctx.save(); ctx.translate(26, H / 2); ctx.rotate(-Math.PI / 2); ctx.fillText('cooler', 0, 0); ctx.restore();
-    ctx.save(); ctx.translate(W - 26, H / 2); ctx.rotate(Math.PI / 2); ctx.fillText('warmer', 0, 0); ctx.restore();
-    var x = W / 2 + padPos.t * (W / 2 - 30), y = H / 2 + padPos.m * (H / 2 - 30);
-    ctx.beginPath(); ctx.arc(x, y, 22, 0, Math.PI * 2); ctx.fillStyle = 'rgba(16,17,20,.85)'; ctx.fill();
-    ctx.lineWidth = 6; ctx.strokeStyle = '#fff'; ctx.stroke();
-    $('padVal').textContent = 'warm ' + fmt(padPos.t) + ' · tint ' + fmt(padPos.m) + '   (0 / 0 = camera result)';
+    ctx.beginPath(); ctx.arc(W / 2, H / 2, 7 * u, 0, Math.PI * 2); ctx.stroke(); // 0/0 = camera result
+    var x = W / 2 + padPos.t * (W / 2) * PAD_RANGE, y = H / 2 + padPos.m * (H / 2) * PAD_RANGE, r = Math.max(13 * u, W * 0.042);
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 8 * u; ctx.shadowOffsetY = 2 * u;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = 'rgba(24,24,28,.88)'; ctx.fill();
+    ctx.restore();
+    ctx.lineWidth = r * 0.3; ctx.strokeStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+    setText('padVal', 'Warm ' + fmt(padPos.t) + ' · Tint ' + fmt(padPos.m) + '   (0 / 0 = camera result)');
   }
-  function fmt(v) { return (v > 0 ? '+' : '') + v.toFixed(2); }
+  function schedPadDraw() { if (!padRaf) padRaf = requestAnimationFrame(drawPad); }
+  function fmt(v) { return (v > 0 ? '+' : v < 0 ? '−' : '±') + Math.abs(v).toFixed(2); }
   function padFromEvent(ev) {
-    var r = pad.getBoundingClientRect();
-    var x = (ev.clientX - r.left) / r.width * pad.width, y = (ev.clientY - r.top) / r.height * pad.height;
-    padPos = { t: clamp((x - pad.width / 2) / (pad.width / 2 - 30)), m: clamp((y - pad.height / 2) / (pad.height / 2 - 30)) };
-    drawPad(); sendPad(false);
+    var r = padRect || pad.getBoundingClientRect();
+    var x = (ev.clientX - r.left) / r.width * 2 - 1, y = (ev.clientY - r.top) / r.height * 2 - 1;
+    padPos = { t: clamp(x / PAD_RANGE), m: clamp(y / PAD_RANGE) };
+    schedPadDraw(); sendPad(false);
   }
   function clamp(v) { return Math.max(-1, Math.min(1, v)); }
   function sendPad(force) {
@@ -687,22 +1189,34 @@
     lastSent = now;
     post('/eye', { action: 'pad', t: padPos.t, m: padPos.m }).catch(function (e) { fail(e.message); });
   }
-  pad.addEventListener('pointerdown', function (ev) { dragging = true; try { pad.setPointerCapture(ev.pointerId); } catch (e) { /* optional */ } padFromEvent(ev); ev.preventDefault(); });
+  pad.addEventListener('pointerdown', function (ev) {
+    dragging = true; padRect = pad.getBoundingClientRect();
+    try { pad.setPointerCapture(ev.pointerId); } catch (e) { /* optional */ }
+    padFromEvent(ev); ev.preventDefault();
+  });
   pad.addEventListener('pointermove', function (ev) { if (dragging) { padFromEvent(ev); ev.preventDefault(); } });
-  function endPad() { if (dragging) { dragging = false; sendPad(true); } }
-  pad.addEventListener('pointerup', endPad); pad.addEventListener('pointercancel', endPad);
+  function endPad() { if (dragging) { dragging = false; padRect = null; sendPad(true); } }
+  pad.addEventListener('pointerup', endPad); pad.addEventListener('pointercancel', endPad); pad.addEventListener('lostpointercapture', endPad);
+  pad.addEventListener('touchmove', function (ev) { ev.preventDefault(); }, { passive: false }); // no page scroll / pull-to-refresh while dragging
+  function nudge(dt, dm) {
+    padPos = { t: clamp(padPos.t + dt * 0.05), m: clamp(padPos.m + dm * 0.05) };
+    drawPad(); sendPad(true);
+  }
   Array.prototype.forEach.call(document.querySelectorAll('.nudge button[data-n]'), function (b) {
     b.addEventListener('click', function () {
       var d = b.getAttribute('data-n').split(',').map(Number);
-      padPos = { t: clamp(padPos.t + d[0] * 0.05), m: clamp(padPos.m + d[1] * 0.05) };
-      drawPad(); sendPad(true);
+      nudge(d[0], d[1]);
     });
+  });
+  pad.addEventListener('keydown', function (ev) {
+    var k = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[ev.key];
+    if (k) { nudge(k[0], k[1]); ev.preventDefault(); }
   });
   $('resetPad').addEventListener('click', function () {
     padPos = { t: 0, m: 0 }; drawPad();
     post('/eye', { action: 'reset' }).then(renderEye).catch(function (e) { fail(e.message); });
   });
-  function setStage(st) { post('/eye', { action: 'stage', stage: st }).then(function () { eyeStage = ''; renderEye(); }).catch(function (e) { fail(e.message); }); }
+  function setStage(st) { post('/eye', { action: 'stage', stage: st }).then(function () { eyeStage = ''; renderEye(); window.scrollTo(0, 0); }).catch(function (e) { fail(e.message); }); }
   $('tabWhite').addEventListener('click', function () { setStage('white'); });
   $('tabDark').addEventListener('click', function () { setStage('dark'); });
   $('tabColors').addEventListener('click', function () { setStage('colors'); });
@@ -717,16 +1231,18 @@
     var e = state.eye, sw = $('swatches');
     if (!sw.children.length) {
       e.colors.forEach(function (c, i) {
-        var b = document.createElement('button');
-        b.style.background = c.css; b.setAttribute('aria-label', c.name);
+        var b = document.createElement('button'), dot = document.createElement('i'), name = document.createElement('span');
+        b.type = 'button'; dot.style.background = c.css; name.textContent = c.name;
+        b.setAttribute('aria-label', 'Show ' + c.name);
+        b.appendChild(dot); b.appendChild(name);
         b.addEventListener('click', function () { post('/eye', { action: 'show', color: i, variant: 'A' }).then(renderEye).catch(function (er) { fail(er.message); }); });
         sw.appendChild(b);
       });
     }
-    Array.prototype.forEach.call(sw.children, function (b, i) { b.classList.toggle('on', i === e.color); });
-    $('showA').classList.toggle('on', e.variant === 'A');
-    $('showB').classList.toggle('on', e.variant === 'B');
-    $('strength').textContent = 'Correction strength ' + Math.round(state.matrixStrength * 100) + ' %';
+    Array.prototype.forEach.call(sw.children, function (b, i) { b.classList.toggle('on', i === e.color); b.setAttribute('aria-pressed', i === e.color ? 'true' : 'false'); });
+    $('showA').classList.toggle('on', e.variant === 'A'); $('showA').setAttribute('aria-pressed', e.variant === 'A' ? 'true' : 'false');
+    $('showB').classList.toggle('on', e.variant === 'B'); $('showB').setAttribute('aria-pressed', e.variant === 'B' ? 'true' : 'false');
+    $('strength').textContent = Math.round(state.matrixStrength * 100) + ' % of the measured correction';
     $('votes').textContent = 'Votes — A: ' + e.votesA + ' · B: ' + e.votesB + ' · same: ' + e.votesSame +
       '. The correction is kept only if A wins.';
   }
@@ -740,16 +1256,183 @@
   $('moreM').addEventListener('click', function () { post('/eye', { action: 'strength', delta: 1 }).then(renderEye).catch(function (e) { fail(e.message); }); });
 
   function finish() {
-    post('/finish').then(function () { setView('vDone'); }).catch(function (e) { fail('Could not reach the PC: ' + e.message); });
+    post('/finish').then(function () { setView('vDone'); renderDone(); }).catch(function (e) { fail('Could not reach the PC: ' + e.message); });
   }
-  $('cancelBtn').addEventListener('click', function () {
-    if (!window.confirm('Cancel the calibration and restore the previous LED colors?')) return;
+  // The saved white balance, drawn like the Result card of the app's Calibration page.
+  function renderDone() {
+    var wb = state && state.wb, rows = $('wbRows');
+    if (!wb || wb.length !== 3 || state.cancelled || $('doneCard').classList.contains('cancelled')) { show('doneResult', false); return; }
+    rows.textContent = '';
+    [['Red', '#e5484d'], ['Green', '#3dbb6b'], ['Blue', '#3b6ff5']].forEach(function (c, i) {
+      var name = document.createElement('span'), bar = document.createElement('span'), fill = document.createElement('i'), val = document.createElement('b');
+      name.textContent = c[0]; bar.className = 'bar'; fill.style.width = Math.round(Math.max(0, Math.min(1, wb[i])) * 100) + '%';
+      fill.style.background = c[1]; val.textContent = Math.round(wb[i] * 100) + ' %';
+      bar.appendChild(fill); rows.appendChild(name); rows.appendChild(bar); rows.appendChild(val);
+    });
+    show('doneResult', true);
+  }
+
+  // ---------------------------------------------------------------- cancel (Fluent-style dialog, confirm() as fallback)
+  var dlg = $('cancelDlg');
+  function doCancel() {
     stopCamera();
-    post('/cancel').then(function () { setView('vDone'); $('vDone').querySelector('p').textContent = 'Calibration cancelled — the previous LED colors are back.'; })
-      .catch(function (e) { fail(e.message); });
-  });
+    post('/cancel').then(function () {
+      $('doneCard').classList.add('cancelled');
+      setView('vDone'); show('doneResult', false);
+      $('doneTitle').textContent = 'Calibration cancelled';
+      $('doneMsg').textContent = 'The previous LED colors are back.';
+    }).catch(function (e) { fail(e.message); });
+  }
+  function askCancel() {
+    if (dlg && typeof dlg.showModal === 'function') { try { dlg.showModal(); return; } catch (e) { /* fall back */ } }
+    if (window.confirm('Cancel the calibration and restore the previous LED colors?')) doCancel();
+  }
+  $('cancelBtn').addEventListener('click', askCancel);
+  $('cancelLive').addEventListener('click', askCancel);
+  $('dlgNo').addEventListener('click', function () { dlg.close(); });
+  $('dlgYes').addEventListener('click', function () { dlg.close(); doCancel(); });
+
+  // ---------------------------------------------------------------- layout: resize / rotation without reload
+  var layoutRaf = 0;
+  function relayout() {
+    layoutRaf = 0;
+    if (demoCam && makeDemoFrame()) { fitW = fitH = 0; }
+    fitCamera();
+    sizePad();
+  }
+  function schedLayout() { if (!layoutRaf) layoutRaf = requestAnimationFrame(relayout); }
+  window.addEventListener('resize', schedLayout);
+  window.addEventListener('orientationchange', schedLayout);
+  if (mqLand.addEventListener) mqLand.addEventListener('change', schedLayout); else if (mqLand.addListener) mqLand.addListener(schedLayout);
+  if (window.ResizeObserver) { var ro = new ResizeObserver(schedLayout); ro.observe(stage); ro.observe(padCol); }
+
+  // ---------------------------------------------------------------- demo mode (?demo=landing|setup|live|video|eye-white|eye-dark|ab|done)
+  function demoState() {
+    return {
+      mode: 'choose', finished: false, cancelled: false, step: 'white', stepTitle: 'White', stepIndex: 1, stepCount: 9, progress: 0.2,
+      errorPercent: 3.4, initialErrorPercent: 6.8, targetPercent: 2, instruction: 'Matching white… 3.4 %',
+      summary: 'Camera: white was off by 6.8 % before. White matched within 1.6 %. Dark tones: 3 levels measured. Red, green and blue measured.',
+      screenGain: 0.62, ledScale: 1, stepSeconds: 14, stepTimeout: 60, notes: [], wb: [0.64, 1, 0.51], gamma: [1, 1, 1],
+      matrixOn: true, hasMatrix: true, matrixStrength: 1,
+      tls: { pending: false, failures: 2, reached: false, lastError: 'UnknownCA' },
+      profileUrl: '#', shortProfileUrl: '192.168.1.20:47800/ca', caName: 'RambiBox Local CA (DESKTOP)', pcName: 'DESKTOP',
+      video: { loopSeconds: 20, stepSeconds: 2.5, position: 0, received: 0, recognized: 0 },
+      eye: { stage: 'white', t: 0.24, m: -0.1, td: -0.14, md: 0.12, color: 3, variant: 'A', votesA: 2, votesB: 0, votesSame: 1,
+        colors: [{ name: 'red', css: '#FF0000' }, { name: 'green', css: '#00FF00' }, { name: 'blue', css: '#0000FF' }, { name: 'orange', css: '#FF8A30' }, { name: 'cyan', css: '#00FFFF' }] }
+    };
+  }
+  var demoPlan = ['Room light (LEDs off)', 'White', 'Dark tones 50 %', 'Dark tones 25 %', 'Dark tones 12 %', 'White check', 'Red', 'Green', 'Blue'];
+  function demoApi(path, opts) {
+    var body = null, s = state, e = s.eye;
+    try { body = opts && typeof opts.body === 'string' ? JSON.parse(opts.body) : null; } catch (x) { body = null; }
+    if (path === '/eye' && body) {
+      if (body.action === 'stage') e.stage = body.stage;
+      else if (body.action === 'pad') { if (e.stage === 'dark') { e.td = body.t; e.md = body.m; } else { e.t = body.t; e.m = body.m; } }
+      else if (body.action === 'reset') { if (e.stage === 'dark') e.td = e.md = 0; else e.t = e.m = 0; }
+      else if (body.action === 'show') { if (typeof body.color === 'number') e.color = body.color; if (body.variant) e.variant = body.variant; }
+      else if (body.action === 'vote') { e[body.variant === 'same' ? 'votesSame' : 'votes' + body.variant]++; e.color = (e.color + 1) % e.colors.length; e.variant = 'A'; }
+      else if (body.action === 'strength') s.matrixStrength = Math.max(0, Math.min(1.5, Math.round((s.matrixStrength + body.delta * 0.1) * 10) / 10));
+    } else if (path === '/skipstep') {
+      s.notes.push(s.stepTitle + ': skipped.');
+      s.stepIndex = Math.min(s.stepCount - 1, s.stepIndex + 1); s.stepTitle = demoPlan[s.stepIndex];
+      s.step = s.stepIndex === 5 ? 'white2' : 'other'; s.progress = (s.stepIndex + 0.2) / s.stepCount;
+    } else if (path === '/finish') { s.finished = true; s.mode = 'finished'; }
+    else if (path === '/skip') { s.mode = 'eye'; }
+    else if (path === '/cancel') { s.cancelled = true; }
+    else if (path.indexOf('/video/frames') === 0) { s.video.received += 6; s.video.recognized += 5; return Promise.resolve({ ok: true, received: s.video.received, recognized: s.video.recognized, state: s }); }
+    else if (path === '/video/done') { s.mode = 'eye'; }
+    return Promise.resolve({ ok: true, state: s });
+  }
+
+  // A synthetic camera picture: dark room, monitor showing the measuring pattern, warm LED glow around it.
+  function rrect(ctx, x, y, w, h, r) {
+    ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+  function makeDemoFrame() {
+    var portrait = window.innerHeight > window.innerWidth;
+    var W = portrait ? 1080 : 1920, H = portrait ? 1920 : 1080;
+    if (!demoCam) {
+      demoCam = document.createElement('canvas'); demoCam.className = 'democam'; demoCam.setAttribute('aria-hidden', 'true');
+      camWrap.insertBefore(demoCam, overlay); cam.classList.add('hidden');
+    } else if (demoCam.width === W && demoCam.height === H) return false;
+    demoCam.width = W; demoCam.height = H;
+    var ctx = demoCam.getContext('2d');
+    var g = ctx.createRadialGradient(W * 0.5, H * 0.45, 10, W * 0.5, H * 0.5, Math.max(W, H) * 0.75);
+    g.addColorStop(0, '#2c2824'); g.addColorStop(1, '#09090b');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#121214'; ctx.fillRect(0, H * (portrait ? 0.66 : 0.8), W, H); // desk
+    var mw = (portrait ? 0.78 : 0.5) * W, mh = mw * 9 / 16, cx = W * 0.5, cy = H * (portrait ? 0.44 : 0.43), ang = -0.018;
+    var x0 = cx - mw / 2, y0 = cy - mh / 2, ca = Math.cos(ang), sa = Math.sin(ang);
+    function P(x, y) { var dx = x - cx, dy = y - cy; return [Math.round((cx + dx * ca - dy * sa) * 10) / 10, Math.round((cy + dx * sa + dy * ca) * 10) / 10]; }
+    function quad(ax, ay, bx, by) { return [P(ax, ay), P(bx, ay), P(bx, by), P(ax, by)]; }
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang); ctx.translate(-cx, -cy);
+    if ('filter' in ctx) {
+      ctx.filter = 'blur(' + Math.round(mh * 0.16) + 'px)';
+      ctx.fillStyle = 'rgba(255,214,170,.55)'; rrect(ctx, x0 - mh * 0.42, y0 - mh * 0.42, mw + mh * 0.84, mh * 1.84, mh * 0.4); ctx.fill();
+      ctx.filter = 'blur(' + Math.round(mh * 0.08) + 'px)';
+      ctx.fillStyle = 'rgba(255,236,210,.85)'; rrect(ctx, x0 - mh * 0.12, y0 - mh * 0.12, mw + mh * 0.24, mh * 1.24, mh * 0.12); ctx.fill();
+      ctx.filter = 'none';
+    } else {
+      for (var i = 56; i >= 1; i--) {
+        var e = mh * 0.62 * i / 56;
+        ctx.fillStyle = 'rgba(255,224,186,0.042)'; rrect(ctx, x0 - e, y0 - e, mw + 2 * e, mh + 2 * e, 12 + e); ctx.fill();
+      }
+    }
+    var b = mw * 0.014;
+    ctx.fillStyle = '#0c0d10'; ctx.fillRect(cx - mw * 0.035, y0 + mh, mw * 0.07, mh * 0.24);
+    rrect(ctx, cx - mw * 0.17, y0 + mh * 1.22, mw * 0.34, mh * 0.04, mh * 0.02); ctx.fill();
+    rrect(ctx, x0 - b, y0 - b, mw + 2 * b, mh + 2 * b, b * 1.4); ctx.fill();
+    ctx.fillStyle = '#f2f0ec'; ctx.fillRect(x0, y0, mw, mh);
+    var band = mh * 0.17;
+    ctx.fillStyle = '#1b1c20'; ctx.fillRect(x0 + band, y0 + band, mw - 2 * band, mh - 2 * band);
+    var sq = mh * 0.13, gx = cx - sq * 1.95, gy = cy - sq * 0.5;
+    ['#dcdcdc', '#8c8c8c', '#404040'].forEach(function (c, k) { ctx.fillStyle = c; ctx.fillRect(gx + k * sq * 1.45, gy, sq, sq); });
+    for (var k = 0; k < 8; k++) { ctx.fillStyle = (0xB5 >> k) & 1 ? '#e8e8e8' : '#2a2a2e'; ctx.fillRect(x0 + band + mh * 0.04 + k * mh * 0.05, y0 + mh - band - mh * 0.08, mh * 0.04, mh * 0.04); }
+    ctx.restore();
+    var d = mh * 0.09, gd = mh * 0.13, gap = b * 3, sx = mw * 0.16, sy = mh * 0.2;
+    var regions = [
+      { kind: 'screen', ok: true, points: quad(x0 + sx, y0 + mh * 0.03, x0 + mw - sx, y0 + mh * 0.03 + d) },
+      { kind: 'glow', ok: true, points: quad(x0 + sx, y0 - gap - gd, x0 + mw - sx, y0 - gap) },
+      { kind: 'screen', ok: true, points: quad(x0 + mh * 0.03, y0 + sy, x0 + mh * 0.03 + d, y0 + mh - sy) },
+      { kind: 'glow', ok: true, points: quad(x0 - gap - gd, y0 + sy, x0 - gap, y0 + mh - sy) },
+      { kind: 'screen', ok: true, points: quad(x0 + mw - mh * 0.03 - d, y0 + sy, x0 + mw - mh * 0.03, y0 + mh - sy) },
+      { kind: 'glow', ok: true, points: quad(x0 + mw + gap, y0 + sy, x0 + mw + gap + gd, y0 + mh - sy) },
+      { kind: 'screen', ok: false, points: quad(x0 + sx, y0 + mh - mh * 0.03 - d, x0 + mw - sx, y0 + mh - mh * 0.03) },
+      { kind: 'glow', ok: false, points: quad(x0 + sx, y0 + mh + gap, x0 + mw - sx, y0 + mh + gap + gd) },
+      { kind: 'ref', ok: true, points: quad(gx - sq * 0.2, gy - sq * 0.2, gx + sq * 4.1, gy + sq * 1.2) }
+    ];
+    lastOverlay = { width: W, height: H, corners: [P(x0, y0), P(x0 + mw, y0), P(x0 + mw, y0 + mh), P(x0, y0 + mh)], regions: regions };
+    return true;
+  }
+  function demoStartLive() {
+    state.mode = 'live';
+    setView('vLive');
+    setRunUI(true);
+    makeDemoFrame();
+    fitCamera();
+    onFrame({ ok: true, used: true, note: 'Matching white… 3.4 %', overlay: lastOverlay, state: state,
+      hints: ['Too much room light — dim the lights for a more accurate result.'] });
+  }
+  function startDemo(v) {
+    state = demoState();
+    setConn('ok', 'Connected'); document.title = 'Demo · ' + document.title;
+    if (v === 'setup') { setView('vChoose'); landing(); }
+    else if (v === 'live') demoStartLive();
+    else if (v === 'video') {
+      state.mode = 'video'; route();
+      show('vProg', true); setRecBusy(true);
+      vProgress('Extracting and sending frames', 0.46, 'Frame 29 of 62 · PC: 24 frames received, 19 show the color loop');
+    } else if (v === 'eye-white' || v === 'eye' || v === 'eye-dark' || v === 'ab') {
+      state.mode = 'eye'; state.eye.stage = v === 'eye-dark' ? 'dark' : v === 'ab' ? 'colors' : 'white'; route();
+    } else if (v === 'done') { state.mode = 'finished'; state.finished = true; route(); }
+    else { state.mode = 'live'; route(); } // landing: the live camera start page
+    // for automated layout checks (headless --dump-dom): horizontal overflow in CSS px
+    document.documentElement.setAttribute('data-overflow', String(document.documentElement.scrollWidth - window.innerWidth));
+  }
 
   // ---------------------------------------------------------------- start
+  if (demo) { startDemo(demo); return; }
   api('/state').then(function () {
     if (!secure && location.hash === '#setup' && state.mode !== 'eye') { setView('vChoose'); landing(); }
     else route();
