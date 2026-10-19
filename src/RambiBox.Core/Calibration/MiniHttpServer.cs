@@ -60,6 +60,12 @@ internal sealed class MiniHttpServer : IDisposable
     /// <summary>When set, connections are TLS (HTTPS) with this certificate (must have a private key).</summary>
     public X509Certificate2? ServerCertificate { get; init; }
 
+    /// <summary>
+    /// Called (thread pool) when a TLS handshake fails, with the client address and the reason — typically the phone
+    /// does not trust the certificate yet. Used for diagnostics shown on the phone and in the log.
+    /// </summary>
+    public Action<IPAddress, string>? TlsHandshakeFailed { get; init; }
+
     public bool IsTls => ServerCertificate is not null;
 
     /// <summary>Client IP of a connection. Tests substitute other addresses to simulate several LAN hosts.</summary>
@@ -233,7 +239,11 @@ internal sealed class MiniHttpServer : IDisposable
             }
             catch (Exception ex) when (ex is AuthenticationException or IOException or OperationCanceledException or Win32Exception)
             {
-                // Usually the phone does not trust the certificate yet (that is how the page detects it): not an error.
+                // Usually the phone does not trust the certificate yet (that is how the page detects it): not an error,
+                // but report it so the phone page can tell the user exactly what is missing.
+                string reason = ex is OperationCanceledException ? "handshake timed out"
+                    : ex.InnerException is { } inner ? $"{ex.Message} ({inner.Message})" : ex.Message;
+                try { TlsHandshakeFailed?.Invoke(remote, reason); } catch { /* diagnostics only */ }
                 await ssl.DisposeAsync().ConfigureAwait(false);
                 return;
             }

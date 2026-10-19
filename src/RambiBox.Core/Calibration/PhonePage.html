@@ -75,23 +75,17 @@
       <h2>One-time setup for the live camera</h2>
       <p class="muted">The live camera needs a secure page. RambiBox made its own certificate for this PC; your phone needs to trust it once.
         It only works on your home network (private addresses) and can be removed any time in Settings → General → VPN &amp; Device Management.</p>
-      <div id="notSafari" class="hidden">
-        <p class="msg warn">iPhone only installs certificate profiles from <b>Safari</b>. Open this setup in Safari:</p>
-        <a id="openSafari" class="btn" href="#">Open in Safari</a>
-        <button id="copyLink" class="secondary">Copy link</button>
-        <div class="url" id="plainUrl"></div>
-        <p class="small">Or open Safari and type the address above. After the setup, come back to this browser — this page continues by itself.</p>
-      </div>
-      <div id="inSafari" class="hidden">
-        <a id="profileBtn" class="btn" href="#">1. Download the certificate profile</a>
-        <p class="small">Tap “Allow” when Safari asks.</p>
-      </div>
+      <p class="msg hidden" id="trustDiag"></p>
       <ol class="steps-small" id="setupSteps">
-        <li>Download the profile (in Safari) and tap <b>Allow</b>.</li>
+        <li><a id="profileBtn" class="btn" href="#">Download the certificate profile</a>
+          <span class="small" id="dlHintSafari">Tap <b>Allow</b> when Safari asks.</span>
+          <span class="small hidden" id="dlHintOther">Your browser saves it as a download: open the <b>Files</b> app → <b>Downloads</b> (or the browser's downloads list) and tap <b>RambiBox</b>. If that doesn't work, open <b>Safari</b> and type
+            <input id="shortUrl" class="url" readonly value=""> <button id="copyLink" class="secondary">Copy</button></span></li>
         <li>Open <b>Settings</b> → <b>Profile Downloaded</b> (near the top) → <b>Install</b> → enter your passcode → <b>Install</b>.</li>
-        <li>Settings → <b>General</b> → <b>About</b> → <b>Certificate Trust Settings</b> → turn on full trust for “<span id="caName">RambiBox Local CA</span>”.</li>
-        <li>Come back to this page. It switches to the live camera automatically.</li>
+        <li><b>Important:</b> Settings → <b>General</b> → <b>About</b> → scroll all the way down → <b>Certificate Trust Settings</b> → turn <b>on</b> “<span id="caName">RambiBox Local CA</span>”. Installing alone is not enough.</li>
+        <li>Come back here. The page continues by itself — or tap the button below.</li>
       </ol>
+      <a id="goSecure" class="btn" href="#">I turned on full trust — continue</a>
       <p class="muted" id="waitTrust"><span class="spinner"></span>Waiting for the certificate…</p>
     </div>
 
@@ -313,7 +307,10 @@
         show('checking', false); showSetup(); show('videoOffer', true);
         (function again() {
           if (view !== 'vChoose' || userChoseVideo) { landingRunning = false; return; }
-          ping(t.ping).then(function (ok2) { if (ok2) location.replace(t.url); else setTimeout(again, 2000); });
+          ping(t.ping).then(function (ok2) {
+            if (ok2) { location.replace(t.url); return; }
+            api('/state').then(updateTrustDiag, function () {}).then(function () { setTimeout(again, 2000); });
+          });
         })();
       });
     })(0);
@@ -323,23 +320,38 @@
     show('setupCard', true);
     if (state.caName) $('caName').textContent = state.caName;
     var safari = isSafari();
-    show('inSafari', safari); show('notSafari', !safari);
+    show('dlHintSafari', safari); show('dlHintOther', !safari);
     $('profileBtn').href = state.profileUrl || '#';
-    var setupUrl = (state.httpUrl || location.href.split('#')[0]) + '#setup';
-    $('plainUrl').textContent = setupUrl;
-    $('openSafari').href = 'x-safari-' + setupUrl;
+    $('shortUrl').value = state.shortProfileUrl || '';
+    if (state.tls && state.tls.url) $('goSecure').href = state.tls.url;
+    updateTrustDiag();
   }
+  // Explains what is still missing, based on what the PC saw on its secure port.
+  function updateTrustDiag() {
+    var t = state && state.tls, el = $('trustDiag');
+    if (!t || !el) return;
+    var msg = '', cls = 'msg';
+    if (t.reached) { msg = 'Your phone trusts the certificate — continuing…'; cls = 'msg good'; }
+    else if (t.failures > 0) {
+      var unknownCa = /UnknownCA/i.test(t.lastError || '');
+      msg = unknownCa
+        ? 'Your phone reached the PC but does not trust the certificate yet. Check step 3: Certificate Trust Settings → turn on “' +
+          (state.caName || 'RambiBox Local CA') + '”. Then tap the button below.'
+        : 'Your phone reached the PC but rejected its certificate (' + (t.lastError || 'unknown reason') +
+          '). Try the button below; if it keeps failing, use the video option.';
+      cls = 'msg warn';
+    }
+    el.textContent = msg; el.className = cls; show('trustDiag', !!msg);
+  }
+  // Copy without the Clipboard API (it only exists on secure pages): select the input and use execCommand.
   $('copyLink').addEventListener('click', function () {
-    var text = $('plainUrl').textContent;
-    var done = function () { $('copyLink').textContent = 'Link copied — paste it in Safari'; };
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () { selectUrl(); });
-    else selectUrl();
+    var inp = $('shortUrl');
+    inp.removeAttribute('readonly'); inp.focus(); inp.select(); inp.setSelectionRange(0, 9999);
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    inp.setAttribute('readonly', ''); inp.blur();
+    $('copyLink').textContent = ok ? 'Copied — paste it in Safari' : 'Long-press the address to copy it';
   });
-  function selectUrl() {
-    var r = document.createRange(); r.selectNodeContents($('plainUrl'));
-    var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
-    $('copyLink').textContent = 'Long-press the selected address to copy it';
-  }
   $('useVideo').addEventListener('click', function () { userChoseVideo = true; setView('vVideo'); renderVideo(); });
   $('toVideo').addEventListener('click', function () {
     stopCamera(); // the video routes work on this (secure) page as well

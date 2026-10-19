@@ -146,6 +146,8 @@ public sealed class PhoneCalibrationService : IDisposable
             _ip = ip;
             _token = NewToken();
             _client = null;
+            _tlsFailures = _tlsRequests = 0;
+            _tlsLastError = null;
             _url = new Uri($"http://{ip}:{server.Port}/c/{_token}");
             _session = new CalibrationSession(_target, _override, _layout, () => _clock.Elapsed.TotalSeconds)
             {
@@ -201,6 +203,7 @@ public sealed class PhoneCalibrationService : IDisposable
                 leaf = _ca.IssueServerCertificate(ip);
                 tls = new MiniHttpServer(HandleAsync, Precheck, MaxUploadBytes)
                 {
+                    TlsHandshakeFailed = OnTlsHandshakeFailed,
                     ClientAddress = ClientAddressOverride ?? (ep => ep.Address),
                     ServerCertificate = leaf,
                 };
@@ -386,12 +389,35 @@ public sealed class PhoneCalibrationService : IDisposable
     // ------------------------------------------------------------------ HTTP routing
 
     private static readonly string[] GetRoutes = ["", "/state", "/ping", "/rambibox-ca.mobileconfig"];
+
+    /// <summary>
+    /// Short, token-less address for the certificate profile ("http://&lt;ip&gt;:&lt;port&gt;/ca") so it can be typed into
+    /// Safari. Only the CA's public certificate is served there (nothing secret), and only while calibration runs.
+    /// </summary>
+    private const string ShortProfilePath = "/ca";
+
+    // ---- TLS diagnostics (guarded by _gate): did the phone reach the secure port, and why was it rejected?
+    private int _tlsFailures, _tlsRequests;
+    private string? _tlsLastError;
+
+    private void OnTlsHandshakeFailed(IPAddress remote, string reason)
+    {
+        int n;
+        lock (_gate)
+        {
+            n = ++_tlsFailures;
+            _tlsLastError = reason;
+        }
+        if (n == 1 || n % 10 == 0)
+            Log.Info($"Calibration: secure connection from the phone rejected (#{n}): {reason}");
+    }
     private static readonly string[] PostRoutes = ["/live", "/frame", "/video/start", "/video/frames", "/video/done", "/skip", "/eye", "/finish", "/cancel"];
 
     /// <summary>Returns the route suffix ("" for the page) if the path carries the right token, else null.</summary>
     private string? Route(string path, out bool isPost)
     {
         isPost = false;
+        if (path == ShortProfilePath) return ShortProfilePath;
         string token;
         lock (_gate) token = _token;
         if (token.Length == 0 || !path.StartsWith("/c/", StringComparison.Ordinal)) return null;
@@ -421,6 +447,7 @@ public sealed class PhoneCalibrationService : IDisposable
         if (r is null) return MiniHttpResponse.Text(404, "Not found");
         bool methodOk = isPost ? method == "POST" : method is "GET" or "HEAD";
         if (!methodOk) return MiniHttpResponse.Text(404, "Not found");
+        if (r == ShortProfilePath) return null; // public certificate only; no session binding needed
         IPAddress? bound;
         lock (_gate) bound = _client;
         if (r == "") return bound is null || bound.Equals(remote) ? null : ForbiddenPage();
@@ -457,6 +484,8 @@ public sealed class PhoneCalibrationService : IDisposable
     private async Task<MiniHttpResponse> HandleAsync(MiniHttpRequest req, CancellationToken ct)
     {
         var route = Route(req.Path, out _);
+        if (route == ShortProfilePath) return MobileConfig();
+        if (req.IsTls) lock (_gate) _tlsRequests++;
         // Precheck ran before the body was read; re-check here because two hosts may race for the first page load.
         if (route == "" ? !TryBind(req.Remote) : route is not null && !IsBoundTo(req.Remote))
             return route == "" ? ForbiddenPage() : Forbidden();
@@ -846,11 +875,19 @@ public sealed class PhoneCalibrationService : IDisposable
             w.WriteString("ping", httpsUrl + "/ping");
         }
         if (tlsProblem is not null) w.WriteString("problem", tlsProblem);
+        int tlsFailures, tlsRequests;
+        string? tlsLastError;
+        lock (_gate) { tlsFailures = _tlsFailures; tlsRequests = _tlsRequests; tlsLastError = _tlsLastError; }
+        w.WriteNumber("failures", tlsFailures);
+        w.WriteBoolean("reached", tlsRequests > 0);
+        if (tlsLastError is not null) w.WriteString("lastError", tlsLastError);
         w.WriteEndObject();
         if (httpUrl is not null)
         {
             w.WriteString("httpUrl", httpUrl);
             w.WriteString("profileUrl", httpUrl + "/rambibox-ca.mobileconfig");
+            var u = new Uri(httpUrl);
+            w.WriteString("shortProfileUrl", $"{u.Host}:{u.Port}{ShortProfilePath}");
         }
         if (_ca is not null)
         {
