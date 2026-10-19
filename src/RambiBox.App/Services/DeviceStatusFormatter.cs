@@ -81,6 +81,13 @@ public static class DeviceStatusFormatter
                     ? "no LED controller found yet" : $"{dev.Port} (not found yet)");
             return $"{info.Name} · {where}";
         }
+        // what the WLED controller itself reported ("WLED-TV · WLED 0.15.0 · 120 LEDs")
+        if (dev.Type == DeviceType.Wled && st.DeviceStatus == DeviceStatus.Connected
+            && host.Device is SwitchingLedDevice { ActiveDriver: Core.Devices.Network.WledDevice { Info: { } wi } })
+        {
+            string target = string.IsNullOrWhiteSpace(dev.Name) ? $"{wi.Name} ({dev.Host})" : dev.Name;
+            return $"{target} · WLED {wi.Version} · {wi.LedCount} LEDs";
+        }
         return dev.Type switch
         {
             DeviceType.Virtual => "No hardware – the colors are shown in the live preview",

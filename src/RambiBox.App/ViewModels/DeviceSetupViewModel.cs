@@ -16,9 +16,13 @@ public sealed record DeviceTypeItem(DeviceType Type, string Name, string Descrip
 }
 
 /// <summary>A controller found by "Find devices", as a card with a "Use this" button.</summary>
-public sealed class FoundDeviceItem(DiscoveredDevice device, bool isCurrent, bool isSupported)
+public sealed class FoundDeviceItem(DiscoveredDevice device, bool isCurrent, bool isSupported, DeviceType applyAs)
 {
     public DiscoveredDevice Device { get; } = device;
+    /// <summary>The controller didn't identify itself (a USB-serial port without greeting): it may be another device.</summary>
+    public bool IsUnverified => !Device.Verified;
+    /// <summary>"Use this", or "Use with DDP" when a WLED controller is applied with the selected DDP / E1.31 protocol.</summary>
+    public string UseLabel => applyAs == Device.Type ? "Use this" : $"Use with {DeviceCatalog.Get(applyAs).Name}";
     public string Name => Device.DisplayName;
     public string Glyph => DeviceStatusFormatter.Glyph(Device.Type);
     public string Detail
@@ -130,7 +134,10 @@ public sealed class DeviceSetupViewModel : ObservableObject, IDisposable
         var s = _host.Settings.Device;
         FoundDevices.Clear();
         foreach (var d in _host.DiscoveredDevices)
-            FoundDevices.Add(new FoundDeviceItem(d, IsInUse(s, d), LedDeviceFactory.IsSupported(d.Type)));
+        {
+            var effective = DeviceCatalog.ForCurrentProtocol(d, s);
+            FoundDevices.Add(new FoundDeviceItem(d, IsInUse(s, effective), LedDeviceFactory.IsSupported(effective.Type), effective.Type));
+        }
         OnPropertyChanged(nameof(HasResults));
         OnPropertyChanged(nameof(ShowNothingFound));
         OnPropertyChanged(nameof(ResultsHeader));
@@ -139,17 +146,21 @@ public sealed class DeviceSetupViewModel : ObservableObject, IDisposable
     /// <summary>"In use" = exactly this controller is configured (a serial one also when auto-detect connected to its port).</summary>
     private bool IsInUse(DeviceSettings s, DiscoveredDevice d)
     {
-        if (d.Type != s.Type) return false;
         var family = DeviceCatalog.Get(d.Type).Family;
-        if (family == DeviceFamily.UsbSerial)
-            return string.Equals(s.Port, d.Port, StringComparison.OrdinalIgnoreCase)
-                   || (string.Equals(s.Port, DeviceSettings.AutoPort, StringComparison.OrdinalIgnoreCase)
-                       && string.Equals(_host.Device.PortName, d.Port, StringComparison.OrdinalIgnoreCase));
-        if (family == DeviceFamily.UsbHid) // "Automatic" uses the first one found
-            return s.DeviceId is not null ? string.Equals(s.DeviceId, d.Id, StringComparison.OrdinalIgnoreCase)
-                : _host.DiscoveredDevices.FirstOrDefault(x => x.Type == d.Type) == d;
+        if (family == DeviceFamily.UsbSerial) // serial discovery reports every port as Adalight; the port is what counts
+            return DeviceCatalog.IsSerial(s.Type)
+                   && (string.Equals(s.Port, d.Port, StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(_host.Device.PortName, d.Port, StringComparison.OrdinalIgnoreCase));
+        if (d.Type != s.Type) return false;
+        if (family == DeviceFamily.UsbHid) // empty / "*" = all Lightpacks chained
+            return string.IsNullOrEmpty(s.DeviceId) || s.DeviceId == LightpackAllId
+                ? d.Id == LightpackAllId || _host.DiscoveredDevices.Count(x => x.Type == d.Type) == 1
+                : string.Equals(s.DeviceId, d.Id, StringComparison.OrdinalIgnoreCase);
         return DeviceAutoSwitchPolicy.IsCurrent(s, d);
     }
+
+    /// <summary>DeviceSettings.DeviceId meaning "all Lightpacks, chained" (LightpackDiscovery.AllDevicesId).</summary>
+    private const string LightpackAllId = Core.Devices.Hid.LightpackDiscovery.AllDevicesId;
 
     // ------------------------------------------------------------------ use a found device + LED count offer
 
@@ -212,21 +223,22 @@ public sealed class DeviceSetupViewModel : ObservableObject, IDisposable
 
     // ------------------------------------------------------------------ Lightpack device choice
 
-    /// <summary>"Automatic" plus the Lightpacks found (and the saved one when it isn't connected).</summary>
+    /// <summary>"All" plus the Lightpacks found (and the saved selection when it isn't connected, e.g. "A1,B2").</summary>
     public ObservableCollection<Option<string>> DeviceIdOptions { get; } = new();
 
     private void RebuildDeviceIdOptions()
     {
         var type = _host.Settings.Device.Type;
-        var saved = _host.Settings.Device.DeviceId ?? "";
-        var wanted = new List<Option<string>> { new("", "Automatic (first one found)") };
+        var saved = _host.Settings.Device.DeviceId is { } id && id != LightpackAllId ? id : "";
+        // "" (= "*") drives every attached Lightpack, chained in Prismatik's order
+        var wanted = new List<Option<string>> { new("", "All connected Lightpacks (automatic)") };
         var found = _host.DiscoveredDevices.Concat(_hidFound)
-            .Where(d => d.Type == type && type == DeviceType.Lightpack)
+            .Where(d => d.Type == type && type == DeviceType.Lightpack && d.Id != LightpackAllId)
             .DistinctBy(d => d.Id.ToUpperInvariant());
         foreach (var d in found)
             wanted.Add(new(d.Id, d.DisplayName + (d.LedCount is int n ? $" · {n} LEDs" : "")));
         if (saved.Length > 0 && !wanted.Any(o => string.Equals(o.Value, saved, StringComparison.OrdinalIgnoreCase)))
-            wanted.Add(new(saved, $"{saved} (not connected)"));
+            wanted.Add(new(saved, saved.Contains(',') ? $"{saved} (chained in this order)" : $"{saved} (not connected)"));
         if (wanted.SequenceEqual(DeviceIdOptions)) return;
         DeviceIdOptions.Clear();
         foreach (var o in wanted) DeviceIdOptions.Add(o);

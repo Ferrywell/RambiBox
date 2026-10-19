@@ -96,10 +96,17 @@
                                     <TextBlock Text="{Binding Glyph}" Style="{StaticResource IconText}" HorizontalAlignment="Center" />
                                 </Border>
                                 <StackPanel Grid.Column="1" Margin="14,0,12,0" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding Name}" Style="{StaticResource SettingTitle}" FontWeight="SemiBold" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Name}" Style="{StaticResource SettingTitle}" FontWeight="SemiBold" />
+                                        <Border Style="{StaticResource Badge}" Margin="8,0,0,0"
+                                                ToolTip="The controller didn't identify itself. It may be another USB device; if it is your LED controller, choose its type under Controller type."
+                                                Visibility="{Binding IsUnverified, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBlock Text="Unverified" />
+                                        </Border>
+                                    </StackPanel>
                                     <TextBlock Text="{Binding Detail}" Style="{StaticResource SettingDescription}" />
                                 </StackPanel>
-                                <Button Grid.Column="2" Content="Use this" Style="{DynamicResource AccentButtonStyle}" VerticalAlignment="Center"
+                                <Button Grid.Column="2" Content="{Binding UseLabel}" Style="{DynamicResource AccentButtonStyle}" VerticalAlignment="Center"
                                         Command="{Binding DataContext.Setup.UseDeviceCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                         CommandParameter="{Binding}" AutomationProperties.Name="{Binding Name, StringFormat='Use {0}'}"
                                         Visibility="{Binding CanUse, Converter={StaticResource BoolToVisibility}}" />
@@ -204,8 +211,7 @@
 
         <!-- USB serial: Adalight, Ardulight, AWA, TPM2 -->
         <StackPanel Visibility="{Binding S.IsSerialType, Converter={StaticResource BoolToVisibility}}">
-            <c:SettingCard Header="Port" Glyph="&#xE88E;"
-                           Description="Automatic finds the controller on any USB port, also after re-plugging. Choose a port only if detection fails.">
+            <c:SettingCard Header="Port" Glyph="&#xE88E;" Description="{Binding S.PortDescription}">
                 <ComboBox MinWidth="260" MaxWidth="360" ItemsSource="{Binding PortOptions}" DisplayMemberPath="Display"
                           SelectedValuePath="Value" SelectedValue="{Binding S.Port}" AutomationProperties.Name="Port" />
             </c:SettingCard>
@@ -217,7 +223,7 @@
 
         <!-- USB HID: Lightpack -->
         <c:SettingCard Header="Lightpack" Glyph="&#xE88E;"
-                       Description="Which Lightpack to use when more than one is connected. Automatic uses the first one found."
+                       Description="Which Lightpack to drive. &quot;All connected&quot; chains every Lightpack in Prismatik's order (10 LEDs each); Find devices lists them."
                        Visibility="{Binding S.IsLightpackType, Converter={StaticResource BoolToVisibility}}">
             <ComboBox MinWidth="260" MaxWidth="360" ItemsSource="{Binding Setup.DeviceIdOptions}" DisplayMemberPath="Display"
                       SelectedValuePath="Value" SelectedValue="{Binding S.SelectedDeviceId}" AutomationProperties.Name="Lightpack device" />
@@ -244,10 +250,13 @@
                           SelectedValue="{Binding S.Protocol}" AutomationProperties.Name="WLED protocol" />
             </c:SettingCard>
             <c:SettingCard Header="Timeout" Glyph="&#xE916;"
-                           Description="Seconds WLED keeps RambiBox's colors after the last update before it returns to its own effect (255 = until it restarts)."
+                           Description="Seconds WLED keeps RambiBox's colors after the last update before it returns to its own effect. 2 or more is recommended (255 = until it restarts)."
                            Visibility="{Binding S.IsWledType, Converter={StaticResource BoolToVisibility}}">
                 <c:NumberBox Width="140" Value="{Binding S.WledTimeoutSeconds}" Minimum="1" Maximum="255" Label="Timeout in seconds" />
             </c:SettingCard>
+            <c:SettingCard Header="In WLED" Glyph="&#xE946;"
+                           Description="Turn on &quot;Receive UDP realtime&quot; in WLED › Config › Sync Interfaces, otherwise WLED ignores RambiBox's colors."
+                           Visibility="{Binding S.IsWledType, Converter={StaticResource BoolToVisibility}}" />
             <c:SettingCard Header="Start universe" Glyph="&#xE8FD;" Description="{Binding S.E131UniverseDescription}"
                            Visibility="{Binding S.IsE131Type, Converter={StaticResource BoolToVisibility}}">
                 <StackPanel Width="140">
@@ -275,7 +284,7 @@
         </c:SettingCard>
 
         <c:SettingCard Header="Alienware lighting" Glyph="&#xE946;"
-                       Description="RambiBox drives the lighting zones of your Alienware PC and peripherals through the AlienFX (LightFX) SDK that comes with Alienware Command Center. There is nothing else to set up."
+                       Description="Requires Alienware Command Center (LightFX). RambiBox drives the lighting zones of your Alienware PC through it; there is nothing else to set up. Use 1 LED in the LED layout for one color, or one LED per light."
                        Visibility="{Binding S.IsAlienFxType, Converter={StaticResource BoolToVisibility}}" />
 
         <c:SettingCard Header="No hardware" Glyph="&#xE946;"

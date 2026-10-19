@@ -128,7 +128,7 @@ public static class DeviceCatalog
                 if (s.Type == DeviceType.E131 && s.E131Multicast) return "sACN multicast";
                 if (!string.IsNullOrWhiteSpace(s.Name)) return s.Name;
                 if (!string.IsNullOrWhiteSpace(s.Host)) return s.Host;
-                return string.IsNullOrWhiteSpace(activePort) ? $"{info.Name} (no address set)" : activePort;
+                return string.IsNullOrWhiteSpace(activePort) ? "no address set" : activePort;
             case DeviceFamily.UsbHid:
                 if (!string.IsNullOrWhiteSpace(activePort)) return activePort; // "Lightpack ABC123", "Lightpack (2 devices)"
                 if (!string.IsNullOrWhiteSpace(s.Name)) return s.Name;

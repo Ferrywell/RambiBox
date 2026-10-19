@@ -329,7 +329,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     public string BaudRateText
     {
-        get => S.Device.BaudRate.ToString();
+        // the AWA driver treats the generic 115200 default as its firmware's 2000000 – show what is actually used
+        get => (S.Device.Type == DeviceType.Awa && S.Device.BaudRate == 115_200 ? 2_000_000 : S.Device.BaudRate).ToString();
         set
         {
             if (int.TryParse(value?.Trim(), out int baud) && baud is >= 1200 and <= 10_000_000)
@@ -383,14 +384,22 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     public bool IsE131Type => S.Device.Type == DeviceType.E131;
     public bool IsAlienFxType => S.Device.Type == DeviceType.AlienFx;
     public bool IsVirtualType => S.Device.Type == DeviceType.Virtual;
-    /// <summary>Raw pixel protocols send the colors in the strip's own order; WLED / Lightpack reorder themselves.</summary>
-    public bool ShowColorOrder => IsSerialType || S.Device.Type is DeviceType.Ddp or DeviceType.E131;
+    /// <summary>Serial and network drivers apply the color order; Lightpack and AlienFX have fixed RGB.</summary>
+    public bool ShowColorOrder => IsSerialType || IsNetworkType;
+
+    public string PortDescription => S.Device.Type switch
+    {
+        DeviceType.Ardulight or DeviceType.Tpm2 =>
+            $"{TypeInfo.Name} controllers don't identify themselves: choose the port once. After it has worked, Automatic finds it again on any USB port.",
+        DeviceType.Awa => "Automatic finds the HyperSerial controller on any USB port, also after re-plugging. Choose a port only if detection fails.",
+        _ => "Automatic finds the controller on any USB port, also after re-plugging. Choose a port only if detection fails.",
+    };
 
     public IReadOnlyList<string> BaudPresets => [.. DeviceCatalog.BaudPresets(S.Device.Type).Select(b => b.ToString())];
 
     public string BaudRateDescription => S.Device.Type switch
     {
-        DeviceType.Awa => "Speed of the serial link. HyperSerial firmware usually runs at 2000000.",
+        DeviceType.Awa => "Speed of the serial link. HyperSerial firmware runs at 2000000 by default; 921600–2000000 work well.",
         DeviceType.Ardulight => "Speed of the serial link. Must match the Ardulight sketch (115200 by default).",
         DeviceType.Tpm2 => "Speed of the serial link. Must match your controller's firmware.",
         _ => "Speed of the serial link. Must match your controller's firmware (115200 for most Adalight sketches).",
@@ -543,11 +552,11 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     /// <summary>Lightpack (and other multi-device families): "" = the first device found, otherwise its id.</summary>
     public string SelectedDeviceId
     {
-        get => S.Device.DeviceId ?? "";
+        get => S.Device.DeviceId is null or "*" ? "" : S.Device.DeviceId; // "*" = all Lightpacks, like empty
         set
         {
             if (value is null) return; // list being rebuilt
-            Set(S.Device.DeviceId ?? "", value, v =>
+            Set(SelectedDeviceId, value, v =>
             {
                 S.Device.DeviceId = v.Length == 0 ? null : v;
                 S.Device.Name = null;
