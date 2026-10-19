@@ -53,6 +53,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _host.OverrideChanged += OnOverrideChanged;
         _host.AmbiBoxStateChanged += OnAmbiBoxStateChanged;
         _host.SettingsChanged += OnSettingsChanged;
+        _host.ApiStatusChanged += OnApiStatusChanged;
 
         CloseAmbiBoxCommand = new RelayCommand(async () => await CloseAmbiBoxAsync(), () => !_closingAmbiBox);
         RemoveAmbiBoxAutostartCommand = new RelayCommand(async () =>
@@ -167,7 +168,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         switch (st.DeviceStatus)
         {
             case DeviceStatus.Connected:
-                if (st.OverrideActive)
+                if (_host.ApiControlling)
+                {
+                    text = "Controlled by an integration";
+                    detail = _host.ApiControl.Locked
+                        ? $"A Prismatik API client ({_host.ApiControl.Owner}) sets the colors on {port}."
+                        : $"Showing the last colors of a Prismatik API client ({_host.ApiControl.Owner}) on {port} until you switch the lights or the mode.";
+                    level = StatusLevel.Good;
+                }
+                else if (st.OverrideActive)
                 {
                     text = $"Showing a test pattern on {port}";
                     level = StatusLevel.Busy;
@@ -283,6 +292,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
         t.Tick += (_, _) => { t.Stop(); RefreshStatus(); };
         t.Start();
+    }
+
+    private void OnApiStatusChanged()
+    {
+        S.RefreshApiStatus();
+        RefreshStatus();
     }
 
     private void OnSettingsChanged(object? sender)
@@ -647,6 +662,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _host.OverrideChanged -= OnOverrideChanged;
         _host.AmbiBoxStateChanged -= OnAmbiBoxStateChanged;
         _host.SettingsChanged -= OnSettingsChanged;
+        _host.ApiStatusChanged -= OnApiStatusChanged;
         S.Dispose();
     }
 }

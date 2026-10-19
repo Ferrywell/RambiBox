@@ -36,6 +36,44 @@
             <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding S.BlackBarDetection}" AutomationProperties.Name="Ignore black bars" />
         </c:SettingCard>
 
+        <TextBlock Text="Prismatik API (for integrations)" Style="{StaticResource SectionHeader}" />
+        <c:SettingCard Header="Prismatik API server" Glyph="&#xE943;"
+                       Description="Lets tools made for Prismatik / Lightpack control RambiBox: Home Assistant (Prismatik integration), the Python “lightpack” library, Stream Deck plugins and scripts.">
+            <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding S.ApiEnabled}" AutomationProperties.Name="Prismatik API server" />
+        </c:SettingCard>
+        <c:SettingCard Header="Port" Glyph="&#xE839;"
+                       Description="Prismatik's default is 3636. Use the same port in the integration.">
+            <TextBox Width="96" TextAlignment="Center" VerticalContentAlignment="Center"
+                     Text="{Binding S.ApiPortText, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="API port" />
+        </c:SettingCard>
+        <c:SettingCard Header="Allow other devices on the network" Glyph="&#xE774;"
+                       Description="Off: only programs on this PC can connect (127.0.0.1). On: devices on your home network (private addresses only) can connect, e.g. Home Assistant. Windows may ask to allow RambiBox in the firewall.">
+            <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding S.ApiAllowLan}" AutomationProperties.Name="Allow other devices on the network" />
+        </c:SettingCard>
+        <c:SettingCard Header="API key" Glyph="&#xE8D7;"
+                       Description="Optional password. Clients must send it first (the “API key” field of the integration). Leave empty for none.">
+            <WrapPanel HorizontalAlignment="Right">
+                <TextBox Width="250" FontFamily="{StaticResource MonoFont}" VerticalContentAlignment="Center" Margin="0,0,8,4"
+                         Text="{Binding S.ApiKey, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="API key" />
+                <Button Content="Generate" Command="{Binding S.GenerateApiKeyCommand}" Margin="0,0,8,4" />
+                <Button Command="{Binding S.CopyApiKeyCommand}" Margin="0,0,0,4" ToolTip="Copy the key" AutomationProperties.Name="Copy the API key">
+                    <TextBlock Text="&#xE8C8;" FontFamily="{StaticResource IconFont}" />
+                </Button>
+            </WrapPanel>
+        </c:SettingCard>
+        <c:InfoBar Severity="Warning" Title="Set an API key" Margin="0,4,0,4"
+                   Message="Other devices on your network can connect. Generate a key and enter it in the integration so only they can control the LEDs."
+                   Visibility="{Binding S.ApiKeyHintVisible, Converter={StaticResource BoolToVisibility}}" />
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorPrimaryBrush}" AutomationProperties.LiveSetting="Polite">
+                    <Run Text="Status:" FontWeight="SemiBold" /> <Run Text="{Binding S.ApiStatusText, Mode=OneWay}" />
+                </TextBlock>
+                <TextBlock Style="{StaticResource SettingDescription}" Margin="0,6,0,0" TextWrapping="Wrap"
+                           Text="Speaks the Prismatik API 2.2 (Lightpack API 1.4): lock, setcolor, setbrightness, setsmooth, setstatus, setmode and the get commands. While an integration holds the lock, its colors are shown (through your white balance) and Home says “Controlled by an integration”; the LEDs return to normal when it unlocks or disconnects." />
+            </StackPanel>
+        </Border>
+
         <TextBlock Text="Appearance" Style="{StaticResource SectionHeader}" />
         <c:SettingCard Header="Theme" Glyph="&#xE790;"
                        Description="RambiBox follows your Windows light or dark mode and accent color automatically. Change them in Windows Settings › Personalization." />
