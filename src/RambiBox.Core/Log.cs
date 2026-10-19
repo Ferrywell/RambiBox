@@ -24,7 +24,10 @@ public static class Log
 
     static Log()
     {
-        Writer = new Thread(WriteLoop) { IsBackground = true, Name = "RambiBox log writer", Priority = ThreadPriority.BelowNormal };
+        // Normal priority: the thread sleeps in the blocking queue almost always, but when something goes wrong
+        // (capture stalls while the GPU / CPU is saturated) the warning must reach the file within a second instead of
+        // being starved behind busy normal-priority threads. Each batch is appended + closed (flushed) right away.
+        Writer = new Thread(WriteLoop) { IsBackground = true, Name = "RambiBox log writer", Priority = ThreadPriority.Normal };
         Writer.Start();
     }
 

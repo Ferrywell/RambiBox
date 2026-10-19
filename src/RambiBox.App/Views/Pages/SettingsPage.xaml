@@ -22,6 +22,15 @@
         </c:SettingCard>
 
         <TextBlock Text="Screen capture" Style="{StaticResource SectionHeader}" />
+        <c:SettingCard Header="Capture method" Glyph="&#xE722;"
+                       Description="Windows Graphics Capture (recommended) — Desktop Duplication can make Chromium browsers stutter on some systems.">
+            <StackPanel>
+                <ComboBox MinWidth="240" MaxWidth="320" ItemsSource="{Binding CaptureMethods}" DisplayMemberPath="Display"
+                          SelectedValuePath="Value" SelectedValue="{Binding S.CaptureMethod}" AutomationProperties.Name="Capture method" />
+                <TextBlock Text="{Binding CaptureMethodStatus}" Style="{StaticResource SettingDescription}" Margin="2,6,0,0"
+                           MaxWidth="320" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+            </StackPanel>
+        </c:SettingCard>
         <c:SettingCard Header="Ignore black bars (letterbox)" Glyph="&#xE740;"
                        Description="For films with black bars, the LEDs use the colors of the picture instead of the bars.">
             <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding S.BlackBarDetection}" AutomationProperties.Name="Ignore black bars" />

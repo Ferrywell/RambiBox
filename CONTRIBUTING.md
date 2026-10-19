@@ -56,7 +56,7 @@ and pull request.
 | Category | Needs | Runs in CI |
 |---|---|---|
 | *(none)* | nothing | yes |
-| `Hardware` | the LED controller, a real monitor and GPU desktop duplication. Close RambiBox first. | no |
+| `Hardware` | the LED controller, a real monitor and the GPU (Windows Graphics Capture / desktop duplication). Close RambiBox first. The capture tests alone (`--filter "Category=Hardware&FullyQualifiedName~RambiBox.Tests.Capture."`) never open a COM port. | no |
 | `Local` | an AmbiBox installation on this PC | no |
 
 New tests that touch real hardware, the desktop or machine-specific state must carry the matching
@@ -66,7 +66,7 @@ New tests that touch real hardware, the desktop or machine-specific state must c
 
 ```
 src/RambiBox.Core      engine, capture, Adalight device, calibration, settings (no UI)
-  Capture/             DXGI desktop duplication, GPU downscale, HDR, black bars, zone averaging
+  Capture/             Windows Graphics Capture + DXGI desktop duplication, shared GPU downscale, HDR, black bars, zone averaging
   Devices/             Adalight protocol, serial link, port enumeration, auto-detect
   Engine/              LightEngine (frame loop, smoothing, overrides), ColorProcessor
   Calibration/         phone calibration: HTTP(S) server, local CA, color loop analysis

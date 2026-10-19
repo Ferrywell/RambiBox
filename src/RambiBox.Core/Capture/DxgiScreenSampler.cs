@@ -1,85 +1,42 @@
 using System.Diagnostics;
 using RambiBox.Core.Config;
 using SharpGen.Runtime;
-using Vortice.Direct3D;
-using Vortice.Direct3D11;
 using Vortice.DXGI;
 
 namespace RambiBox.Core.Capture;
 
 /// <summary>
 /// Screen sampler based on DXGI Desktop Duplication.
-/// <para>Per frame: AcquireNextFrame → copy into an own mip-mapped texture → ReleaseFrame immediately →
-/// GenerateMips (GPU box filter, done in linear light via an sRGB view / FP16) → copy ONE small mip level
-/// (~160×90 at 1440p) to a staging texture → Map → convert to a linear float image (desktop orientation, HDR tone-mapped)
-/// → black bar detection → exact area-weighted zone averages. Steady state is allocation free.</para>
+/// <para>Per frame: AcquireNextFrame → copy into an own mip-mapped texture → ReleaseFrame immediately → the shared
+/// <see cref="GpuFrameReducer"/> pipeline (GenerateMips in linear light → small mip → staging → fence → Map → linear
+/// float image in desktop orientation, HDR tone-mapped → black bars → exact area-weighted zone averages).
+/// Steady state is allocation free.</para>
 /// <para>Failures (mode switches, secure desktop, driver resets, unplugged monitors) never throw: <see cref="Sample"/>
 /// returns <see cref="SampleResult.Unavailable"/>, sleeps instead of spinning, and re-initializes with backoff.</para>
+/// <para>An active Desktop Duplication session can make Chromium's DirectComposition presentation stall on some
+/// systems, so <see cref="WgcScreenSampler"/> is preferred where available (see <see cref="SwitchingScreenSampler"/>).</para>
 /// </summary>
 public sealed class DxgiScreenSampler : IScreenSampler
 {
-    /// <summary>Target width of the downscaled image (the chosen mip level is the smallest one at least this wide).</summary>
-    internal const int MinSmallWidth = 128;
     private const int MinUnavailableSleepMs = 16;
     private const int FirstBackoffMs = 250, MaxBackoffMs = 2000;
-    private const double PreviewIntervalSeconds = 0.1;
     private const double SlowCheckIntervalSeconds = 2.0;
 
-    private const Format FormatBgra = Format.B8G8R8A8_UNorm;
-    private const Format FormatBgraSrgb = Format.B8G8R8A8_UNorm_SRgb;
-    private const Format FormatFp16 = Format.R16G16B16A16_Float;
-    private static readonly Format[] DuplicationFormats = [FormatBgra, FormatFp16];
+    private static readonly Format[] DuplicationFormats = [GpuFrameReducer.FormatBgra, GpuFrameReducer.FormatFp16];
 
     private readonly object _sync = new();
-    private readonly object _publicLock = new(); // preview + black bars (read from the UI thread)
     private bool _disposed;
 
     // ---- Configuration
     private string _monitorId = "";
-    private LedZone[] _zones = [];
-    private ZoneGeom[] _geoms = [];
-    private bool _blackBarDetection;
-    private bool _geometryDirty = true;
 
-    // ---- Device / duplication
-    private ID3D11Device? _device;
-    private ID3D11DeviceContext? _context;
-    private IntPtr _contextPtr;
-    // GPU completion fence: waiting on a kernel event instead of a blocking Map(). NVIDIA drivers busy-wait inside
-    // a blocking Map, which cost ~6% of a core at 34 captures/s; the fence wait costs almost nothing.
-    private ID3D11DeviceContext4? _context4;
-    private ID3D11Fence? _fence;
-    private ulong _fenceValue;
-    private readonly AutoResetEvent _gpuDone = new(false);
-    private Vortice.Luid _adapterLuid;
-    private string _adapterName = "";
+    // ---- Device (owned by the reducer) / duplication
+    private readonly GpuFrameReducer _reducer = new("Capture (Desktop Duplication): ");
     private IDXGIOutputDuplication? _dupl;
     private IntPtr _duplPtr;
-    private SurfaceRotation _rotation;
     private DisplayTarget? _target;
     private bool _targetExact;
     private volatile MonitorInfo? _currentMonitor;
-
-    // ---- Downscale resources (depend on the desktop texture size/format)
-    private ID3D11Texture2D? _mipTex;
-    private ID3D11ShaderResourceView? _srv;
-    private ID3D11Texture2D? _staging;
-    private IntPtr _mipTexPtr, _stagingPtr;
-    private int _srcW, _srcH, _srcFormat = -1;
-    private int _mipLevel, _smallTexW, _smallTexH;
-    private bool _fp16;
-    private float _sdrWhiteScRgb = ColorMath.DefaultSdrWhiteNits / ColorMath.ScRgbNitsPerUnit;
-
-    // ---- CPU side
-    private float[] _linear = [];
-    private int _imgW, _imgH; // desktop orientation
-    private readonly BlackBarDetector _bars = new();
-    private (float Top, float Bottom, float Left, float Right) _barsPublic;
-    private byte[] _preview = [];
-    private int _previewW, _previewH;
-    private bool _hasPreview;
-    private long _lastPreviewTs;
-    private readonly long _epochTs = Stopwatch.GetTimestamp();
 
     // ---- Retry / logging
     private long _nextInitTs;
@@ -91,12 +48,12 @@ public sealed class DxgiScreenSampler : IScreenSampler
 
     // ---- Diagnostics (tests / benchmark)
     internal double LastWorkMs { get; private set; }
-    internal double LastMapWaitMs { get; private set; }
+    internal double LastMapWaitMs => _reducer.LastMapWaitMs;
     internal long FramesCaptured { get; private set; }
-    internal bool IsFp16 => _fp16;
-    internal float SdrWhiteNits => _sdrWhiteScRgb * ColorMath.ScRgbNitsPerUnit;
-    internal (int Width, int Height) SmallImageSize => (_imgW, _imgH);
-    internal int MipLevel => _mipLevel;
+    internal bool IsFp16 => _reducer.IsFp16;
+    internal float SdrWhiteNits => _reducer.SdrWhiteNits;
+    internal (int Width, int Height) SmallImageSize => _reducer.SmallImageSize;
+    internal int MipLevel => _reducer.MipLevel;
 
     public DxgiScreenSampler() { }
 
@@ -108,10 +65,7 @@ public sealed class DxgiScreenSampler : IScreenSampler
 
     public MonitorInfo? CurrentMonitor => _currentMonitor;
 
-    public (float Top, float Bottom, float Left, float Right) BlackBars
-    {
-        get { lock (_publicLock) return _barsPublic; }
-    }
+    public (float Top, float Bottom, float Left, float Right) BlackBars => _reducer.BlackBars;
 
     public void Configure(string monitorId, IReadOnlyList<LedZone> zones, bool blackBarDetection)
     {
@@ -133,19 +87,7 @@ public sealed class DxgiScreenSampler : IScreenSampler
                     else _targetExact = exact || monitorId.Length == 0;
                 }
             }
-            if (zones.Count != _zones.Length || !zones.SequenceEqual(_zones))
-            {
-                _zones = zones.ToArray();
-                _geoms = new ZoneGeom[_zones.Length];
-                _geometryDirty = true;
-            }
-            if (blackBarDetection != _blackBarDetection)
-            {
-                _blackBarDetection = blackBarDetection;
-                _bars.Reset();
-                PublishBars();
-                _geometryDirty = true;
-            }
+            _reducer.Configure(zones, blackBarDetection);
         }
     }
 
@@ -167,7 +109,7 @@ public sealed class DxgiScreenSampler : IScreenSampler
             {
                 int hr = ex is SharpGenException sg ? sg.ResultCode.Code : ex.HResult;
                 ReportFailure($"Capture error: {ex.GetType().Name}: {ex.Message}");
-                if (IsDeviceLost(hr) || _device is null) TeardownAll(); else TeardownDuplication();
+                if (IsDeviceLost(hr) || _reducer.Device is null) TeardownAll(); else TeardownDuplication();
                 ScheduleRetry(immediate: false);
                 SleepUnavailable(timeoutMs);
                 return SampleResult.Unavailable;
@@ -175,22 +117,7 @@ public sealed class DxgiScreenSampler : IScreenSampler
         }
     }
 
-    public bool TryGetPreview(out byte[] bgra, out int width, out int height)
-    {
-        lock (_publicLock)
-        {
-            if (!_hasPreview)
-            {
-                bgra = [];
-                width = height = 0;
-                return false;
-            }
-            width = _previewW;
-            height = _previewH;
-            bgra = _preview.AsSpan(0, width * height * 4).ToArray();
-            return true;
-        }
-    }
+    public bool TryGetPreview(out byte[] bgra, out int width, out int height) => _reducer.TryGetPreview(out bgra, out width, out height);
 
     public void Dispose()
     {
@@ -199,7 +126,7 @@ public sealed class DxgiScreenSampler : IScreenSampler
             if (_disposed) return;
             _disposed = true;
             TeardownAll();
-            _gpuDone.Dispose();
+            _reducer.Dispose();
             _currentMonitor = null;
         }
     }
@@ -262,12 +189,12 @@ public sealed class DxgiScreenSampler : IScreenSampler
             if (hr >= 0)
             {
                 NativeCom.GetTextureDesc(tex, out var desc);
-                if (EnsureResources(in desc))
+                if (_reducer.EnsureResources(in desc, out var formatError))
                 {
-                    if (_mipLevel > 0) NativeCom.CopySubresourceRegion(_contextPtr, _mipTexPtr, 0, tex, 0);
-                    else NativeCom.CopySubresourceRegion(_contextPtr, _stagingPtr, 0, tex, 0);
+                    _reducer.CopyIn(tex);
                     ok = true;
                 }
+                else ReportFailure(formatError!);
             }
         }
         finally
@@ -282,84 +209,20 @@ public sealed class DxgiScreenSampler : IScreenSampler
             if (hr < 0) HandleHresult(hr, "QueryInterface(ID3D11Texture2D)");
             else
             {
-                TeardownDuplication(); // unsupported desktop format (reported by EnsureResources)
+                TeardownDuplication(); // unsupported desktop format (reported above)
                 ScheduleRetry(immediate: false);
             }
             SleepUnavailable(timeoutMs);
             return SampleResult.Unavailable;
         }
 
-        // ---- GPU downscale and read back the small mip level
-        var ctx = _context!;
-        if (_mipLevel > 0)
+        // ---- GPU downscale, read back the small mip level, zone averages
+        int mapHr = _reducer.Reduce(destRgb);
+        if (mapHr < 0)
         {
-            ctx.GenerateMips(_srv!);
-            NativeCom.CopySubresourceRegion(_contextPtr, _stagingPtr, 0, _mipTexPtr, (uint)_mipLevel);
-        }
-        long mapStart = Stopwatch.GetTimestamp();
-        if (_fence is not null && _context4 is not null)
-        {
-            _fenceValue++;
-            _context4.Signal(_fence, _fenceValue);
-            try
-            {
-                _fence.SetEventOnCompletion(_fenceValue, _gpuDone.SafeWaitHandle.DangerousGetHandle());
-                ctx.Flush();
-                _gpuDone.WaitOne(250); // the Map below then returns without blocking
-            }
-            catch (SharpGenException)
-            {
-                // Device lost etc.: fall through to Map, whose HRESULT drives the normal recovery path.
-            }
-        }
-        var mr = ctx.Map(_staging!, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.None, out var mapped);
-        LastMapWaitMs = Stopwatch.GetElapsedTime(mapStart).TotalMilliseconds;
-        if (mr.Failure)
-        {
-            HandleHresult(mr.Code, "Map");
+            HandleHresult(mapHr, "Map");
             SleepUnavailable(timeoutMs);
             return SampleResult.Unavailable;
-        }
-        try
-        {
-            unsafe
-            {
-                int bpp = _fp16 ? 8 : 4;
-                int len = (int)mapped.RowPitch * (_smallTexH - 1) + _smallTexW * bpp;
-                var src = new ReadOnlySpan<byte>((void*)mapped.DataPointer, len);
-                if (_fp16)
-                    FrameConverter.ConvertFp16(src, _smallTexW, _smallTexH, (int)mapped.RowPitch, _rotation, _sdrWhiteScRgb, ColorMath.DefaultKnee, _linear);
-                else
-                    FrameConverter.ConvertBgra8(src, _smallTexW, _smallTexH, (int)mapped.RowPitch, _rotation, _linear);
-            }
-        }
-        finally
-        {
-            ctx.Unmap(_staging!, 0);
-        }
-
-        // ---- CPU analysis on the tiny image
-        double now = Stopwatch.GetElapsedTime(_epochTs).TotalSeconds;
-        if (_blackBarDetection && _bars.Update(_linear, _imgW, _imgH, now))
-        {
-            PublishBars();
-            _geometryDirty = true;
-        }
-        if (_geometryDirty)
-        {
-            var content = _blackBarDetection
-                ? ZoneMath.ContentRect(_barsPublic.Top, _barsPublic.Bottom, _barsPublic.Left, _barsPublic.Right)
-                : RectF.Full;
-            ZoneMath.BuildGeometry(_zones, _imgW, _imgH, content, _geoms);
-            _geometryDirty = false;
-        }
-        ZoneMath.Average(_linear, _imgW, _geoms, destRgb);
-        if (destRgb.Length > _geoms.Length * 3) destRgb[(_geoms.Length * 3)..].Clear();
-
-        if (Stopwatch.GetElapsedTime(_lastPreviewTs).TotalSeconds >= PreviewIntervalSeconds)
-        {
-            _lastPreviewTs = Stopwatch.GetTimestamp();
-            UpdatePreview();
         }
 
         FramesCaptured++;
@@ -375,71 +238,10 @@ public sealed class DxgiScreenSampler : IScreenSampler
         return SampleResult.NewFrame;
     }
 
-    /// <summary>Creates/recreates the mip texture, SRV and staging texture when the desktop size or format changes.</summary>
-    private bool EnsureResources(in NativeCom.TEXTURE2D_DESC desc)
-    {
-        if (desc.Width == _srcW && desc.Height == _srcH && desc.Format == _srcFormat && _staging is not null) return true;
-
-        ReleaseResources();
-        var device = _device!;
-        var srcFormat = (Format)desc.Format;
-        if (srcFormat != FormatBgra && srcFormat != FormatFp16 && srcFormat != FormatBgraSrgb)
-        {
-            ReportFailure($"Unsupported desktop format {srcFormat}");
-            return false; // caller tears the duplication down after ReleaseFrame
-        }
-
-        int w = (int)desc.Width, h = (int)desc.Height;
-        int level = ChooseMipLevel(w, h);
-
-        // BGRA: filter through an sRGB view so GenerateMips averages linear light (copying UNORM → UNORM_SRGB is
-        // allowed: same typeless group). FP16 scRGB is linear already.
-        var work = srcFormat == FormatFp16 ? FormatFp16 : FormatBgraSrgb;
-        if (level > 0)
-        {
-            var need = FormatSupport.MipAutogen | FormatSupport.RenderTarget | FormatSupport.Texture2D;
-            if ((device.CheckFormatSupport(work) & need) != need) work = srcFormat;
-
-            _mipTex = device.CreateTexture2D(new Texture2DDescription(work, (uint)w, (uint)h, 1, (uint)(level + 1),
-                BindFlags.RenderTarget | BindFlags.ShaderResource, ResourceUsage.Default, CpuAccessFlags.None, 1, 0,
-                ResourceOptionFlags.GenerateMips));
-            _srv = device.CreateShaderResourceView(_mipTex, null);
-            _mipTexPtr = _mipTex.NativePointer;
-        }
-        else work = srcFormat;
-
-        _smallTexW = Math.Max(1, w >> level);
-        _smallTexH = Math.Max(1, h >> level);
-        _staging = device.CreateTexture2D(new Texture2DDescription(work, (uint)_smallTexW, (uint)_smallTexH, 1, 1,
-            BindFlags.None, ResourceUsage.Staging, CpuAccessFlags.Read, 1, 0, ResourceOptionFlags.None));
-        _stagingPtr = _staging.NativePointer;
-
-        _srcW = w; _srcH = h; _srcFormat = desc.Format;
-        _mipLevel = level;
-        _fp16 = srcFormat == FormatFp16;
-        (_imgW, _imgH) = RotationMapper.DesktopSize(_rotation, _smallTexW, _smallTexH);
-        _linear = new float[_imgW * _imgH * 3];
-        _bars.Reset();
-        PublishBars();
-        _geometryDirty = true;
-        if (_fp16) RefreshSdrWhite();
-        Log.Info($"Capture surface {w}×{h} {srcFormat} → mip {level} ({_smallTexW}×{_smallTexH}, work format {work}), rotation {_rotation}" +
-                 (_fp16 ? $", HDR tone mapping (SDR white {SdrWhiteNits:0} nits)" : ""));
-        return true;
-    }
-
-    /// <summary>Smallest mip level whose longer side is still ≥ <see cref="MinSmallWidth"/> (2560 → 160, 1920 → 240, 3840 → 240).</summary>
-    internal static int ChooseMipLevel(int width, int height)
-    {
-        int size = Math.Max(width, height), level = 0;
-        while ((size >> (level + 1)) >= MinSmallWidth) level++;
-        return level;
-    }
-
     /// <summary>Periodic work (every 2 s): refresh SDR white level; switch to the configured monitor when it reappears.</summary>
     private bool SlowChecks()
     {
-        if (_fp16) RefreshSdrWhite();
+        if (_reducer.IsFp16) _reducer.RefreshSdrWhite();
         if (!_targetExact && _monitorId.Length > 0 && _target is not null)
         {
             var t = DisplayTopology.Resolve(DisplayTopology.GetTargets(1000), _monitorId, out bool exact);
@@ -452,33 +254,6 @@ public sealed class DxgiScreenSampler : IScreenSampler
             }
         }
         return false;
-    }
-
-    private void RefreshSdrWhite()
-    {
-        float nits = ColorMath.DefaultSdrWhiteNits;
-        if (_target is not null && DisplayConfigNative.GetSdrWhiteNits(_target.AdapterId, _target.TargetId) is { } n && n >= 40f)
-            nits = n;
-        _sdrWhiteScRgb = nits / ColorMath.ScRgbNitsPerUnit;
-    }
-
-    private void UpdatePreview()
-    {
-        int n = _imgW * _imgH;
-        lock (_publicLock)
-        {
-            if (_preview.Length < n * 4) _preview = new byte[n * 4];
-            FrameConverter.ToPreviewBgra(_linear, n, _preview);
-            _previewW = _imgW;
-            _previewH = _imgH;
-            _hasPreview = true;
-        }
-    }
-
-    private void PublishBars()
-    {
-        var b = _blackBarDetection ? _bars.Bars : default;
-        lock (_publicLock) _barsPublic = b;
     }
 
     // =====================================================================================================
@@ -502,20 +277,7 @@ public sealed class DxgiScreenSampler : IScreenSampler
         try
         {
             factory = DXGI.CreateDXGIFactory1<IDXGIFactory1>();
-            for (uint a = 0; output is null && factory.EnumAdapters1(a, out var ad).Success; a++)
-            {
-                for (uint o = 0; ad.EnumOutputs(o, out var op).Success; o++)
-                {
-                    var d = op.Description;
-                    if (d.AttachedToDesktop && string.Equals(d.DeviceName, target.Info.GdiDeviceName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        output = op;
-                        break;
-                    }
-                    op.Dispose();
-                }
-                if (output is null) ad.Dispose(); else adapter = ad;
-            }
+            (adapter, output) = DxgiOutputs.Find(factory, target.Info.GdiDeviceName);
             if (output is null || adapter is null)
             {
                 DisplayTopology.Invalidate();
@@ -524,13 +286,10 @@ public sealed class DxgiScreenSampler : IScreenSampler
                 return false;
             }
 
-            var adesc = adapter.Description1;
-            if (_device is null || !_adapterLuid.Equals(adesc.Luid) || _device.DeviceRemovedReason.Failure)
+            if (_reducer.NeedsDevice(adapter.Description1.Luid))
             {
                 TeardownAll();
-                CreateDevice(adapter);
-                _adapterLuid = adesc.Luid;
-                _adapterName = adesc.Description;
+                _reducer.CreateDevice(adapter);
             }
 
             int hr = Duplicate(output, out var dupl);
@@ -542,32 +301,21 @@ public sealed class DxgiScreenSampler : IScreenSampler
             _dupl = dupl;
             _duplPtr = dupl.NativePointer;
             var dd = dupl.Description;
-            var newRotation = RotationMapper.FromDxgi((int)dd.Rotation);
-            if (newRotation != _rotation)
-            {
-                _rotation = newRotation;
-                _srcFormat = -1; // rebuild the CPU image with the new orientation
-            }
+            _reducer.Rotation = RotationMapper.FromDxgi((int)dd.Rotation);
 
-            bool hdr = target.Info.IsHdr;
-            using (var o6 = output.QueryInterfaceOrNull<IDXGIOutput6>())
-                if (o6 is not null) hdr = o6.Description1.ColorSpace == ColorSpaceType.RgbFullG2084NoneP2020;
-            var bounds = output.Description.DesktopCoordinates;
-            var info = target.Info with
-            {
-                X = bounds.Left, Y = bounds.Top, Width = bounds.Right - bounds.Left, Height = bounds.Bottom - bounds.Top,
-                IsHdr = hdr,
-            };
+            var info = DxgiOutputs.Describe(output, target.Info);
+            bool hdr = info.IsHdr;
 
             bool changedTarget = _target is null || !string.Equals(_target.Info.Id, target.Info.Id, StringComparison.OrdinalIgnoreCase);
             _target = target;
+            _reducer.Target = target;
             _targetExact = exact || _monitorId.Length == 0;
             _currentMonitor = info;
             _everCaptured = false;
             _nextSlowCheckTs = Stopwatch.GetTimestamp() + (long)(SlowCheckIntervalSeconds * Stopwatch.Frequency);
             if (changedTarget || _lastFailure is not null)
-                Log.Info($"Capturing {info.FriendlyName} [{info.Id}] on {_adapterName}, {dd.ModeDescription.Format}" +
-                         $"{(hdr ? " HDR" : "")}, rotation {_rotation}{(_targetExact ? "" : " (configured monitor not found, using fallback)")}");
+                Log.Info($"Capturing {info.FriendlyName} [{info.Id}] on {_reducer.AdapterName} with Desktop Duplication, {dd.ModeDescription.Format}" +
+                         $"{(hdr ? " HDR" : "")}, rotation {_reducer.Rotation}{(_targetExact ? "" : " (configured monitor not found, using fallback)")}");
             return true;
         }
         catch (Exception ex)
@@ -584,32 +332,6 @@ public sealed class DxgiScreenSampler : IScreenSampler
         }
     }
 
-    private void CreateDevice(IDXGIAdapter1 adapter)
-    {
-        FeatureLevel[] levels = [FeatureLevel.Level_11_1, FeatureLevel.Level_11_0, FeatureLevel.Level_10_1, FeatureLevel.Level_10_0];
-        var r = D3D11.D3D11CreateDevice(adapter, DriverType.Unknown, DeviceCreationFlags.BgraSupport, levels, out ID3D11Device? dev, out ID3D11DeviceContext? ctx);
-        if (r.Failure || dev is null || ctx is null)
-        {
-            dev?.Dispose(); ctx?.Dispose();
-            throw new SharpGenException(r, "D3D11CreateDevice failed", null);
-        }
-        _device = dev;
-        _context = ctx;
-        _contextPtr = ctx.NativePointer;
-        try
-        {
-            using var dev5 = dev.QueryInterfaceOrNull<ID3D11Device5>();
-            _context4 = ctx.QueryInterfaceOrNull<ID3D11DeviceContext4>();
-            if (dev5 is not null && _context4 is not null) _fence = dev5.CreateFence(0, FenceFlags.None);
-        }
-        catch (Exception ex)
-        {
-            Log.Warn($"Capture: GPU fence unavailable, using blocking readback ({ex.Message})");
-            _fence = null;
-        }
-        if (_fence is null) { _context4?.Dispose(); _context4 = null; }
-    }
-
     private int Duplicate(IDXGIOutput output, out IDXGIOutputDuplication? dupl)
     {
         dupl = null;
@@ -621,7 +343,7 @@ public sealed class DxgiScreenSampler : IScreenSampler
                 var prev = DisplayConfigNative.SetThreadDpiAwarenessContext(DisplayConfigNative.DpiPerMonitorV2);
                 try
                 {
-                    dupl = o5.DuplicateOutput1(_device!, DuplicationFormats);
+                    dupl = o5.DuplicateOutput1(_reducer.Device!, DuplicationFormats);
                     return 0;
                 }
                 catch (SharpGenException ex) when (ex.ResultCode.Code is NativeCom.DXGI_ERROR_UNSUPPORTED or NativeCom.E_INVALIDARG
@@ -643,7 +365,7 @@ public sealed class DxgiScreenSampler : IScreenSampler
         using var o1 = output.QueryInterface<IDXGIOutput1>();
         try
         {
-            dupl = o1.DuplicateOutput(_device!);
+            dupl = o1.DuplicateOutput(_reducer.Device!);
             return 0;
         }
         catch (SharpGenException ex)
@@ -656,7 +378,7 @@ public sealed class DxgiScreenSampler : IScreenSampler
     // Failure handling
     // =====================================================================================================
 
-    private static bool IsDeviceLost(int hr) => hr is NativeCom.DXGI_ERROR_DEVICE_REMOVED or NativeCom.DXGI_ERROR_DEVICE_RESET
+    internal static bool IsDeviceLost(int hr) => hr is NativeCom.DXGI_ERROR_DEVICE_REMOVED or NativeCom.DXGI_ERROR_DEVICE_RESET
         or NativeCom.DXGI_ERROR_DEVICE_HUNG or NativeCom.DXGI_ERROR_DRIVER_INTERNAL_ERROR;
 
     private void HandleHresult(int hr, string where)
@@ -682,9 +404,9 @@ public sealed class DxgiScreenSampler : IScreenSampler
                 ScheduleRetry(immediate: false);
                 break;
             default:
-                if (IsDeviceLost(hr) && _device is not null)
+                if (IsDeviceLost(hr) && _reducer.Device is { } device)
                 {
-                    var reason = _device.DeviceRemovedReason;
+                    var reason = device.DeviceRemovedReason;
                     ReportFailure($"{where}: {NativeCom.Describe(hr)} (GPU device lost, reason {NativeCom.Describe(reason.Code)})");
                 }
                 else ReportFailure($"{where}: {NativeCom.Describe(hr)}");
@@ -740,32 +462,44 @@ public sealed class DxgiScreenSampler : IScreenSampler
         _dupl = null;
     }
 
-    private void ReleaseResources()
-    {
-        _mipTexPtr = _stagingPtr = IntPtr.Zero;
-        try { _srv?.Dispose(); } catch { }
-        try { _mipTex?.Dispose(); } catch { }
-        try { _staging?.Dispose(); } catch { }
-        _srv = null; _mipTex = null; _staging = null;
-        _srcW = _srcH = 0;
-        _srcFormat = -1;
-    }
-
     private void TeardownAll()
     {
         TeardownDuplication();
-        ReleaseResources();
-        _contextPtr = IntPtr.Zero;
-        try { _fence?.Dispose(); } catch { }
-        try { _context4?.Dispose(); } catch { }
-        _fence = null;
-        _context4 = null;
-        _fenceValue = 0;
-        try { _context?.ClearState(); } catch { }
-        try { _context?.Dispose(); } catch { }
-        try { _device?.Dispose(); } catch { }
-        _context = null;
-        _device = null;
-        _adapterLuid = default;
+        _reducer.ReleaseDevice();
+    }
+}
+
+/// <summary>DXGI output lookup shared by the samplers.</summary>
+internal static class DxgiOutputs
+{
+    /// <summary>Finds the adapter + output that drives the GDI display <paramref name="gdiDeviceName"/> (both null if none).</summary>
+    public static (IDXGIAdapter1? Adapter, IDXGIOutput? Output) Find(IDXGIFactory1 factory, string gdiDeviceName)
+    {
+        for (uint a = 0; factory.EnumAdapters1(a, out var ad).Success; a++)
+        {
+            for (uint o = 0; ad.EnumOutputs(o, out var op).Success; o++)
+            {
+                var d = op.Description;
+                if (d.AttachedToDesktop && string.Equals(d.DeviceName, gdiDeviceName, StringComparison.OrdinalIgnoreCase))
+                    return (ad, op);
+                op.Dispose();
+            }
+            ad.Dispose();
+        }
+        return (null, null);
+    }
+
+    /// <summary>Monitor info with the output's current desktop rectangle and HDR state (IDXGIOutput6 color space).</summary>
+    public static MonitorInfo Describe(IDXGIOutput output, MonitorInfo fromTopology)
+    {
+        bool hdr = fromTopology.IsHdr;
+        using (var o6 = output.QueryInterfaceOrNull<IDXGIOutput6>())
+            if (o6 is not null) hdr = o6.Description1.ColorSpace == ColorSpaceType.RgbFullG2084NoneP2020;
+        var bounds = output.Description.DesktopCoordinates;
+        return fromTopology with
+        {
+            X = bounds.Left, Y = bounds.Top, Width = bounds.Right - bounds.Left, Height = bounds.Bottom - bounds.Top,
+            IsHdr = hdr,
+        };
     }
 }

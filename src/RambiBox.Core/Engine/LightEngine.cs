@@ -364,6 +364,7 @@ public sealed class LightEngine : IDisposable
         _settings = s;
         _settingsVersion++;
         _proc.Configure(s.Color);
+        if (_sampler is ICaptureMethodSelector selector) selector.SetCaptureMethod(s.Capture.Method); // switched inside Configure
         _sampler.Configure(s.Capture.MonitorId, s.Layout.Zones, s.Capture.BlackBarDetection);
         _device.Configure(s.Device, s.Layout.Zones.Count + s.Layout.Offset);
         if (initial) Log.Info($"Engine started: {s.Layout.Zones.Count} LEDs, mode {s.Mode}, port {s.Device.Port}");

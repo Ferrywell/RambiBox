@@ -45,7 +45,9 @@ were made with the built-in `--demo` mode, which shows a synthetic scene instead
 ## Features
 
 - **Screen ambilight.**
-  - Captures the screen with DXGI desktop duplication and shrinks it on the GPU, at ~1.2 ms per frame.
+  - Captures the screen with **Windows Graphics Capture** (the API behind the Snipping Tool; no yellow border, no
+    cursor) and shrinks it on the GPU, at under a millisecond of work per frame. DXGI desktop duplication, the
+    method AmbiBox uses, is still there as a fallback and can be chosen under **Settings → Capture method**.
   - Uses about 1 % of one CPU core while running.
   - With 112 LEDs at 115200 baud it reaches ~32 fps; at that point the serial link is the limit, not the PC.
   - Frames are paced by wire time, so nothing queues up. From capture to LED takes a few milliseconds plus the time
@@ -180,7 +182,7 @@ See [SECURITY.md](SECURITY.md) for how the calibration server is protected.
 | **USB-serial chips** | CH340/CH341/CH9102, FTDI FT232R/FT-X, Silicon Labs CP210x and Arduino's own USB (VID 2341/2A03) are recognized for auto-detect. Other chips work with a fixed port. |
 | **Link** | **115200 baud** by default; other rates can be chosen on the Device page. RGB, GRB and other color orders are supported. |
 | **LEDs** | WS2812B, WS2811, SK6812 and anything else your sketch drives. Any count and start corner, clockwise or counter-clockwise. |
-| **PC** | Windows 10 version 2004 (build 19041) or newer, or Windows 11, 64-bit. Any GPU with DXGI desktop duplication. HDR supported. If you have several monitors, choose the one behind the strip. |
+| **PC** | Windows 10 version 2004 (build 19041) or newer, or Windows 11, 64-bit. Any GPU with a WDDM driver (Windows Graphics Capture, or DXGI desktop duplication as a fallback). HDR supported. If you have several monitors, choose the one behind the strip. |
 
 ## FAQ & troubleshooting
 
@@ -209,6 +211,27 @@ If you cancelled the prompt, use **Calibration → Allow…**.
     (lion icon) for accurate results.
 - **iPhone:** only **Safari** can install the certificate profile directly. In other browsers, open the downloaded
   file from the **Files** app. Don't forget **Certificate Trust Settings** (see above).
+</details>
+
+<details>
+<summary><b>Chrome, Edge or Brave stutter or freeze while RambiBox (or AmbiBox) runs</b></summary>
+
+On some PCs, Chromium-based browsers freeze for several seconds every few minutes while a program captures the
+screen with **DXGI desktop duplication**, the method AmbiBox and RambiBox 1.0.0 use. This happens most when you scroll
+pages with a lot of video. Chromium's GPU process stalls in its DirectComposition presentation path, and sometimes its
+GPU watchdog restarts it. Capturing less often doesn't help; any active duplication session triggers it.
+
+Since 1.0.1 RambiBox captures with **Windows Graphics Capture** instead, which goes through Windows' own capture path
+and doesn't cause this. **Settings → Capture method**:
+
+| Choice | What it does |
+|---|---|
+| **Automatic** (default) | Windows Graphics Capture when Windows supports it, otherwise desktop duplication. |
+| **Windows Graphics Capture** | Always this method. If it can't start (5 attempts in a row), RambiBox falls back to desktop duplication and says so under the setting. |
+| **Desktop Duplication (legacy)** | The AmbiBox method. Only useful if Windows Graphics Capture misbehaves on your PC. |
+
+The line under the choice shows the method in use. You can switch at any time; capture restarts immediately. If the
+browser still stutters, make sure AmbiBox isn't running too, because it uses desktop duplication.
 </details>
 
 <details>
@@ -272,7 +295,7 @@ publish.cmd                                                      &rem single sel
 
 ```
 src/RambiBox.Core      engine, capture, Adalight device, calibration, settings (no UI)
-  Capture/             DXGI desktop duplication, GPU downscale, HDR tone-mapping, black-bar detection
+  Capture/             Windows Graphics Capture + DXGI desktop duplication, shared GPU downscale, HDR tone-mapping, black-bar detection
   Devices/             Adalight protocol, serial link, port enumeration, auto-detect / re-plug handling
   Engine/              LightEngine frame loop, smoothing, color processing, test patterns
   Calibration/         phone calibration: LAN HTTP(S) server, local CA, color-loop analysis

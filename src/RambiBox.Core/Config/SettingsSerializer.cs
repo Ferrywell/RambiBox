@@ -59,6 +59,7 @@ public static class SettingsSerializer
         if (string.IsNullOrWhiteSpace(s.Device.Port)) s.Device.Port = DeviceSettings.AutoPort;
         if (s.Device.BaudRate <= 0) s.Device.BaudRate = 115200;
         s.Capture.MonitorId ??= "";
+        if (!Enum.IsDefined(s.Capture.Method)) s.Capture.Method = CaptureMethod.Auto; // e.g. a number from a hand-edited file
 
         var c = s.Color;
         c.Brightness = Math.Clamp(c.Brightness, 0, 1);

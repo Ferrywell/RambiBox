@@ -121,7 +121,7 @@ public class FrameConverterTests
     [InlineData(100, 80, 0, 100)]
     public void Mip_level_targets_128_to_256_pixels(int w, int h, int level, int longSide)
     {
-        int l = DxgiScreenSampler.ChooseMipLevel(w, h);
+        int l = GpuFrameReducer.ChooseMipLevel(w, h);
         Assert.Equal(level, l);
         Assert.Equal(longSide, Math.Max(w, h) >> l);
     }

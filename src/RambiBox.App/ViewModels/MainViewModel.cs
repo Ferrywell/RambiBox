@@ -231,9 +231,32 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         CaptureText = st.CaptureMs > 0 && s.Mode == LightMode.Ambilight
             ? $"{st.CaptureFps:0} fps · {st.CaptureMs:0.0} ms" : "–";
         MonitorText = st.Monitor is { } m ? $"{m.FriendlyName}{(m.IsHdr ? " · HDR" : "")}" : "–";
-        foreach (var n in new[] { nameof(DeviceTitle), nameof(DeviceDescription), nameof(LinkFpsText), nameof(OutputFpsText), nameof(CaptureText), nameof(MonitorText) })
+        CaptureMethodStatus = DescribeCaptureMethod(_host.Sampler);
+        foreach (var n in new[] { nameof(DeviceTitle), nameof(DeviceDescription), nameof(LinkFpsText), nameof(OutputFpsText), nameof(CaptureText),
+                                  nameof(MonitorText), nameof(CaptureMethodStatus) })
             OnPropertyChanged(n);
     }
+
+    /// <summary>"In use: …" line under the capture method choice.</summary>
+    public string CaptureMethodStatus { get; private set; } = "";
+
+    internal static string DescribeCaptureMethod(IScreenSampler sampler) => sampler is ICaptureMethodSelector sel
+        ? sel.EffectiveMethod switch
+        {
+            CaptureMethod.WindowsGraphicsCapture => "In use: Windows Graphics Capture (active)",
+            CaptureMethod.DesktopDuplication when sel.IsFallback =>
+                "In use: Desktop Duplication (fallback – Windows Graphics Capture is not available on this PC)",
+            CaptureMethod.DesktopDuplication => "In use: Desktop Duplication (active)",
+            _ => "In use: starting…",
+        }
+        : "In use: demo scene (no screen capture)";
+
+    public IReadOnlyList<Option<CaptureMethod>> CaptureMethods { get; } =
+    [
+        new(CaptureMethod.Auto, "Automatic (recommended)"),
+        new(CaptureMethod.WindowsGraphicsCapture, "Windows Graphics Capture"),
+        new(CaptureMethod.DesktopDuplication, "Desktop Duplication (legacy)"),
+    ];
 
     private void SetStatus(string text, string detail, StatusLevel level, bool closeAmbiBox)
     {

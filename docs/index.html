@@ -168,7 +168,7 @@
           <article class="card feature">
             <div class="feature-icon" style="--c:#2bb673"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2.5V6M15 2.5V6M9 18v3.5M15 18v3.5M2.5 9H6M2.5 15H6M18 9h3.5M18 15h3.5"/></g></svg></div>
             <h3>Efficient</h3>
-            <p>DXGI desktop duplication with GPU downscaling: about 1&nbsp;% of one core and ~22&nbsp;MB of RAM. Nothing runs while the window is closed.</p>
+            <p>Windows Graphics Capture with GPU downscaling: about 1&nbsp;% of one core and ~22&nbsp;MB of RAM. Nothing runs while the window is closed.</p>
           </article>
           <article class="card feature">
             <div class="feature-icon" style="--c:#e8590c"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M13 2.5 4.5 13.5H11L10 21.5l8.5-11H12l1-8Z"/></svg></div>
@@ -221,7 +221,7 @@
         <div class="card pipeline-wrap">
           <svg class="pipeline pipeline-wide" viewBox="0 0 960 230" role="img" aria-labelledby="pipe-title pipe-desc">
             <title id="pipe-title">RambiBox pipeline</title>
-            <desc id="pipe-desc">The screen is captured with DXGI desktop duplication and downscaled on the GPU, the light engine turns edge colors into LED colors, and the Adalight device sends them over USB serial to the LED strip.</desc>
+            <desc id="pipe-desc">The screen is captured with Windows Graphics Capture and downscaled on the GPU, the light engine turns edge colors into LED colors, and the Adalight device sends them over USB serial to the LED strip.</desc>
             <defs>
               <linearGradient id="flowGradient" x1="0" x2="1">
                 <stop offset="0" stop-color="#ff4f9a"/><stop offset="0.5" stop-color="#ffd03a"/><stop offset="1" stop-color="#14d8f0"/>
@@ -237,7 +237,7 @@
             <path d="M128 69h24" stroke="#7d8496" stroke-width="2"/>
             <rect x="160" y="56" width="26" height="26" rx="3" fill="url(#screenGrad)" opacity="0.9"/>
             <text x="40" y="136" font-size="19" font-weight="700">Capture</text>
-            <text class="sub" x="40" y="160">DXGI desktop duplication</text>
+            <text class="sub" x="40" y="160">Windows Graphics Capture</text>
             <text class="sub" x="40" y="178">GPU downscale · HDR tone-map</text>
             <text class="sub" x="40" y="196">black-bar detection</text>
             <!-- arrow -->
@@ -274,7 +274,7 @@
             <title id="pipe2-title">RambiBox pipeline: capture, light engine, LED strip</title>
             <rect class="node" x="10" y="10" width="300" height="140" rx="18"/>
             <text x="34" y="52" font-size="20" font-weight="700">1 · Capture</text>
-            <text class="sub" x="34" y="80">DXGI desktop duplication</text>
+            <text class="sub" x="34" y="80">Windows Graphics Capture</text>
             <text class="sub" x="34" y="100">GPU downscale · HDR tone-map</text>
             <text class="sub" x="34" y="120">black-bar detection</text>
             <path class="flow" d="M160 156v40" stroke-width="4" fill="none"/>
@@ -297,7 +297,7 @@
         <div class="how-details">
           <div class="card">
             <h3><span class="step-num">1</span>Capture</h3>
-            <p>Windows hands over each new desktop frame as a GPU texture. RambiBox shrinks it on the GPU and copies back only a thumbnail — about 1.2&nbsp;ms per frame. HDR frames are tone-mapped to your SDR brightness.</p>
+            <p>Windows hands over each new desktop frame as a GPU texture. RambiBox shrinks it on the GPU and copies back only a thumbnail — about 1&nbsp;ms per frame. HDR frames are tone-mapped to your SDR brightness.</p>
           </div>
           <div class="card">
             <h3><span class="step-num">2</span>Engine</h3>
@@ -526,7 +526,7 @@ install.cmd</code></pre>
             <h3>PC</h3>
             <ul>
               <li><b>Windows 10</b> (2004 / build 19041) or <b>Windows 11</b>, 64-bit</li>
-              <li>Any GPU with desktop duplication (DXGI 1.2) — HDR supported</li>
+              <li>Any GPU with a WDDM driver (Windows Graphics Capture or desktop duplication) — HDR supported</li>
               <li>Multiple monitors: pick the one behind the strip</li>
             </ul>
           </div>
@@ -557,6 +557,10 @@ install.cmd</code></pre>
           <details>
             <summary>The phone page shows a certificate warning (Brave) or noisy colors.</summary>
             <div class="answer"><p>In Brave, tap <b>Show details → Visit this website</b>. Brave Shields add random noise to camera images ("farbling"); turn Shields off for this page (lion icon) for the best accuracy. On iPhone, open the setup link in <b>Safari</b> to install the profile — then enable it under <span class="path">Settings → General → About → Certificate Trust Settings</span>.</p></div>
+          </details>
+          <details>
+            <summary>Chrome, Edge or Brave stutter while RambiBox or AmbiBox runs.</summary>
+            <div class="answer"><p>On some PCs, Chromium-based browsers freeze for a few seconds every few minutes while another program captures the screen with <i>DXGI desktop duplication</i>, the method AmbiBox and RambiBox 1.0.0 use. Since 1.0.1 RambiBox uses <b>Windows Graphics Capture</b> by default, which avoids this. You can change it under <b>Settings → Capture method</b>. <i>Automatic</i> is recommended, and <i>Desktop Duplication (legacy)</i> is only a fallback.</p></div>
           </details>
           <details>
             <summary>Does it work with HDR?</summary>

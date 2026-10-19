@@ -63,6 +63,7 @@ public partial class SettingsPage : UserControl
         s.General = cur.General;
         s.Capture.BlackBarDetection = cur.Capture.BlackBarDetection;
         s.Capture.MonitorId = cur.Capture.MonitorId;
+        s.Capture.Method = cur.Capture.Method;
         s.Static.MoodEffect = cur.Static.MoodEffect;
         s.Static.MoodSpeed = cur.Static.MoodSpeed;
         s.Device.LastPort = cur.Device.LastPort ?? s.Device.LastPort;

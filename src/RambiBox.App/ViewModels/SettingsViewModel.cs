@@ -299,6 +299,12 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => Set(S.Capture.BlackBarDetection, value, v => S.Capture.BlackBarDetection = v);
     }
 
+    public CaptureMethod CaptureMethod
+    {
+        get => S.Capture.Method;
+        set => Set(S.Capture.Method, value, v => S.Capture.Method = v);
+    }
+
     public int MaxFps
     {
         get => S.Capture.MaxFps;

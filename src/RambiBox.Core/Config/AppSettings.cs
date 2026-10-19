@@ -137,10 +137,46 @@ public sealed class ColorSettings
     public int SmoothingMs { get; set; } = 100;
 }
 
+/// <summary>How the screen is captured.</summary>
+[JsonConverter(typeof(CaptureMethodJsonConverter))]
+public enum CaptureMethod
+{
+    /// <summary>Windows Graphics Capture when the system supports it, otherwise Desktop Duplication.</summary>
+    Auto,
+    /// <summary>Windows.Graphics.Capture (falls back to Desktop Duplication if it can't start).</summary>
+    WindowsGraphicsCapture,
+    /// <summary>DXGI Desktop Duplication (the classic AmbiBox method; can make Chromium browsers stutter on some PCs).</summary>
+    DesktopDuplication,
+}
+
+/// <summary>
+/// Writes the enum name; reads names case-insensitively and turns anything unknown (a value written by a newer
+/// version, a typo) into <see cref="CaptureMethod.Auto"/> instead of failing the whole settings file.
+/// </summary>
+public sealed class CaptureMethodJsonConverter : JsonConverter<CaptureMethod>
+{
+    public override CaptureMethod Read(ref System.Text.Json.Utf8JsonReader reader, Type typeToConvert, System.Text.Json.JsonSerializerOptions options)
+    {
+        if (reader.TokenType == System.Text.Json.JsonTokenType.String
+            && Enum.TryParse<CaptureMethod>(reader.GetString(), ignoreCase: true, out var m) && Enum.IsDefined(m)
+            && !int.TryParse(reader.GetString(), out _))
+            return m;
+        if (reader.TokenType == System.Text.Json.JsonTokenType.Number && reader.TryGetInt32(out int n) && Enum.IsDefined((CaptureMethod)n))
+            return (CaptureMethod)n;
+        reader.Skip();
+        return CaptureMethod.Auto;
+    }
+
+    public override void Write(System.Text.Json.Utf8JsonWriter writer, CaptureMethod value, System.Text.Json.JsonSerializerOptions options)
+        => writer.WriteStringValue(Enum.IsDefined(value) ? value.ToString() : nameof(CaptureMethod.Auto));
+}
+
 public sealed class CaptureSettings
 {
     /// <summary>Stable monitor id (see MonitorInfo.Id); empty = primary monitor.</summary>
     public string MonitorId { get; set; } = "";
+    /// <summary>Capture API. Missing in settings files from 1.0.0 → <see cref="CaptureMethod.Auto"/>.</summary>
+    public CaptureMethod Method { get; set; } = CaptureMethod.Auto;
     /// <summary>Upper bound for updates per second; 0 = as fast as the LED link allows.</summary>
     public int MaxFps { get; set; } = 0;
     /// <summary>Detect letterbox/pillarbox black bars and sample the picture instead of the bars.</summary>
