@@ -226,14 +226,16 @@ public sealed class LightEngine : IDisposable
             double dt = lastIter == 0 ? 0 : now - lastIter;
             lastIter = now;
             var t0 = Stopwatch.GetTimestamp();
-            bool whiteBalanceOnly = false, raw01 = false;
+            bool whiteBalanceOnly = false, raw01 = false, useMatrix = true;
             float remaining = 0;
 
             if (ov is not null)
             {
                 ov.Render(output, n, now);
-                raw01 = !ov.ApplyWhiteBalance;
-                whiteBalanceOnly = ov.ApplyWhiteBalance;
+                var path = ov.ColorPath;
+                raw01 = path == OverrideColorPath.Raw;
+                whiteBalanceOnly = !raw01;
+                useMatrix = path == OverrideColorPath.LedCorrection;
                 _proc.Reset();
                 haveCapture = false;
             }
@@ -307,7 +309,7 @@ public sealed class LightEngine : IDisposable
             var dest = frame.AsSpan(offset * 3);
             frame.AsSpan(0, offset * 3).Clear();
             if (raw01) ColorProcessor.Raw(output, dest);
-            else _proc.ToDevice(output, dest, whiteBalanceOnly);
+            else _proc.ToDevice(output, dest, whiteBalanceOnly, useMatrix);
 
             double pms = Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
             procMs = procMs == 0 ? pms : procMs * 0.9 + pms * 0.1;

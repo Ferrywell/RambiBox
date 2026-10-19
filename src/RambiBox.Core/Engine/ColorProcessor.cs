@@ -4,7 +4,8 @@ namespace RambiBox.Core.Engine;
 
 /// <summary>
 /// Turns captured zone colors into LED values. Pure CPU math on a few hundred floats per frame — no allocations.
-/// Pipeline (Ambilight): dark threshold → gamma → saturation/hue → smoothing → min brightness → brightness × white balance.
+/// Pipeline (Ambilight): dark threshold → gamma → saturation/hue → smoothing → min brightness →
+/// LED color matrix → per-channel LED gamma → brightness × white balance.
 /// </summary>
 public sealed class ColorProcessor
 {
@@ -17,6 +18,7 @@ public sealed class ColorProcessor
     private float _chGammaR = 1, _chGammaG = 1, _chGammaB = 1;
     private float _tauSeconds;
     private float[]? _hueMatrix; // 3x3 row-major, null when hue shift is 0
+    private float[]? _ledMatrix; // 3x3 row-major LED color correction, null = identity
 
     public void Configure(ColorSettings c)
     {
@@ -33,6 +35,7 @@ public sealed class ColorProcessor
         _chGammaB = (float)c.ChannelGammaB;
         _tauSeconds = c.SmoothingMs / 1000f;
         _hueMatrix = Math.Abs(c.HueShift) < 0.01 ? null : HueRotation((float)c.HueShift);
+        _ledMatrix = SettingsSerializer.NormalizeMatrix(c.ColorMatrix) is { } m ? Array.ConvertAll(m, v => (float)v) : null;
     }
 
     /// <summary>Forget the smoothing state (next frame jumps straight to target).</summary>
@@ -120,15 +123,23 @@ public sealed class ColorProcessor
     /// Final stage: min brightness, brightness and white balance, quantized to bytes.
     /// <paramref name="whiteBalanceOnly"/> skips min brightness (used by raw-ish overrides).
     /// </summary>
-    public void ToDevice(ReadOnlySpan<float> rgb, Span<byte> dest, bool whiteBalanceOnly = false)
+    public void ToDevice(ReadOnlySpan<float> rgb, Span<byte> dest, bool whiteBalanceOnly = false, bool useMatrix = true)
     {
         float min = whiteBalanceOnly ? 0 : _min;
         float scale = 1f - min;
         float kr = _bright * _wbR * 255f, kg = _bright * _wbG * 255f, kb = _bright * _wbB * 255f;
         bool chGamma = _chGammaR != 1f || _chGammaG != 1f || _chGammaB != 1f;
+        var lm = useMatrix ? _ledMatrix : null;
         for (int i = 0, n = Math.Min(rgb.Length, dest.Length); i + 2 < n; i += 3)
         {
             float r = min + rgb[i] * scale, g = min + rgb[i + 1] * scale, b = min + rgb[i + 2] * scale;
+            if (lm is not null)
+            {
+                float nr = lm[0] * r + lm[1] * g + lm[2] * b;
+                float ng = lm[3] * r + lm[4] * g + lm[5] * b;
+                float nb = lm[6] * r + lm[7] * g + lm[8] * b;
+                r = Math.Clamp(nr, 0f, 1f); g = Math.Clamp(ng, 0f, 1f); b = Math.Clamp(nb, 0f, 1f);
+            }
             if (chGamma)
             {
                 r = MathF.Pow(r, _chGammaR);

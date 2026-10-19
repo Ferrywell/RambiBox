@@ -143,3 +143,30 @@ public class SettingsTests
         Assert.Equal(LightMode.Ambilight, store.Load().Mode);
     }
 }
+
+public class ColorMatrixTests
+{
+    [Fact]
+    public void Matrix_rows_are_normalized_and_white_is_preserved()
+    {
+        var m = SettingsSerializer.NormalizeMatrix([0.9, 0.2, 0.1, 0, 1, 0, 0.1, 0.1, 1.0]);
+        Assert.NotNull(m);
+        for (int r = 0; r < 3; r++) Assert.Equal(1.0, m![r * 3] + m[r * 3 + 1] + m[r * 3 + 2], 9);
+        var p = new ColorProcessor();
+        p.Configure(new ColorSettings { WhiteR = 1, WhiteG = 1, WhiteB = 1, ColorMatrix = m });
+        var bytes = new byte[6];
+        p.ToDevice([1f, 1f, 1f, 1f, 0f, 0f], bytes);
+        Assert.Equal(new byte[] { 255, 255, 255 }, bytes[..3]);   // white unchanged
+        Assert.NotEqual((byte)0, bytes[5]);                        // pure red now mixes a little blue in
+        p.ToDevice([1f, 0f, 0f], bytes, whiteBalanceOnly: true, useMatrix: false);
+        Assert.Equal(new byte[] { 255, 0, 0 }, bytes[..3]);        // calibration can bypass it
+    }
+
+    [Fact]
+    public void Identity_or_garbage_matrix_becomes_null()
+    {
+        Assert.Null(SettingsSerializer.NormalizeMatrix([1, 0, 0, 0, 1, 0, 0, 0, 1]));
+        Assert.Null(SettingsSerializer.NormalizeMatrix([1, 2]));
+        Assert.Null(SettingsSerializer.NormalizeMatrix([double.NaN, 0, 0, 0, 1, 0, 0, 0, 1]));
+    }
+}

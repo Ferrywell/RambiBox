@@ -15,8 +15,24 @@ public interface ILedOverride
     /// </summary>
     bool ApplyWhiteBalance { get; }
 
+    /// <summary>
+    /// Finer control than <see cref="ApplyWhiteBalance"/> (which maps to Raw / LedCorrection).
+    /// Calibration uses <see cref="OverrideColorPath.WhiteBalanceNoMatrix"/> to measure the strip's own primaries.
+    /// </summary>
+    OverrideColorPath ColorPath => ApplyWhiteBalance ? OverrideColorPath.LedCorrection : OverrideColorPath.Raw;
+
     /// <summary>Fill <paramref name="rgb"/> (ledCount*3 floats 0..1, R,G,B).</summary>
     void Render(Span<float> rgb, int ledCount, double timeSeconds);
+}
+
+public enum OverrideColorPath
+{
+    /// <summary>0..1 → 0..255 directly, no corrections at all.</summary>
+    Raw,
+    /// <summary>Per-channel LED gamma + white balance × brightness, but no color matrix.</summary>
+    WhiteBalanceNoMatrix,
+    /// <summary>Full LED correction: color matrix + per-channel gamma + white balance × brightness.</summary>
+    LedCorrection,
 }
 
 [Flags]

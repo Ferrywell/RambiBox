@@ -123,6 +123,12 @@ public sealed class ColorSettings
     public double ChannelGammaR { get; set; } = 1.0;
     public double ChannelGammaG { get; set; } = 1.0;
     public double ChannelGammaB { get; set; } = 1.0;
+    /// <summary>
+    /// Optional 3×3 LED color correction (row-major, applied to LED drive values before channel gamma and white
+    /// balance). Each row sums to 1 so white and grays are unaffected; it only re-aims saturated colors so the
+    /// strip's primaries look closer to the monitor's. Null = identity. Fitted by phone calibration.
+    /// </summary>
+    public double[]? ColorMatrix { get; set; }
     /// <summary>Lowest output level 0..1 so LEDs never go fully dark (0 = off allowed).</summary>
     public double MinBrightness { get; set; } = 0.0;
     /// <summary>Colors with max channel below this (0..1) are treated as black. Removes flicker in dark scenes.</summary>

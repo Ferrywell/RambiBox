@@ -23,6 +23,29 @@ public static class SettingsSerializer
 
     public static AppSettings Clone(AppSettings s) => Deserialize(Serialize(s));
 
+    /// <summary>
+    /// Validates a color matrix: 9 finite entries, clamped to [-1, 2], each row rescaled to sum to 1
+    /// (white-preserving). Identity or invalid → null.
+    /// </summary>
+    public static double[]? NormalizeMatrix(double[]? m)
+    {
+        if (m is null || m.Length != 9 || m.Any(v => !double.IsFinite(v))) return null;
+        var r = new double[9];
+        bool identity = true;
+        for (int row = 0; row < 3; row++)
+        {
+            double sum = 0;
+            for (int col = 0; col < 3; col++) sum += r[row * 3 + col] = Math.Clamp(m[row * 3 + col], -1, 2);
+            if (Math.Abs(sum) < 0.05) return null; // degenerate row
+            for (int col = 0; col < 3; col++)
+            {
+                r[row * 3 + col] /= sum;
+                if (Math.Abs(r[row * 3 + col] - (row == col ? 1 : 0)) > 1e-6) identity = false;
+            }
+        }
+        return identity ? null : r;
+    }
+
     /// <summary>Repairs missing sections and clamps values to sane ranges (defensive against hand-edited files).</summary>
     public static void Normalize(AppSettings s)
     {
@@ -48,6 +71,7 @@ public static class SettingsSerializer
         c.ChannelGammaR = Math.Clamp(c.ChannelGammaR, 0.5, 2);
         c.ChannelGammaG = Math.Clamp(c.ChannelGammaG, 0.5, 2);
         c.ChannelGammaB = Math.Clamp(c.ChannelGammaB, 0.5, 2);
+        c.ColorMatrix = NormalizeMatrix(c.ColorMatrix);
         c.MinBrightness = Math.Clamp(c.MinBrightness, 0, 1);
         c.DarkThreshold = Math.Clamp(c.DarkThreshold, 0, 0.5);
         c.SmoothingMs = Math.Clamp(c.SmoothingMs, 0, 2000);
