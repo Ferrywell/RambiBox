@@ -310,7 +310,13 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     public string Port
     {
         get => S.Device.Port;
-        set => Set(S.Device.Port, string.IsNullOrWhiteSpace(value) ? DeviceSettings.AutoPort : value, v => S.Device.Port = v);
+        set
+        {
+            // null comes from the ComboBox while its port list is being rebuilt (USB plug/unplug) — not a user
+            // choice; ignoring it keeps a fixed "COM5" from silently turning into "Auto".
+            if (value is null) return;
+            Set(S.Device.Port, string.IsNullOrWhiteSpace(value) ? DeviceSettings.AutoPort : value, v => S.Device.Port = v);
+        }
     }
 
     public string BaudRateText

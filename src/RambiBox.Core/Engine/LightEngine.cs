@@ -21,7 +21,7 @@ public sealed class LightEngine : IDisposable
 
     private Thread? _thread;
     private volatile bool _running;
-    private volatile AppSettings? _pendingSettings;
+    private AppSettings? _pendingSettings; // handed over with Interlocked.Exchange
     private volatile ILedOverride? _override;
     private int _paused; // PauseReason flags (Interlocked)
 
@@ -49,7 +49,7 @@ public sealed class LightEngine : IDisposable
     {
         if (_running) return;
         _settings = initial.Clone();
-        _pendingSettings = null;
+        Volatile.Write(ref _pendingSettings, null);
         _running = true;
         _thread = new Thread(Run) { IsBackground = true, Name = "RambiBox engine", Priority = ThreadPriority.AboveNormal };
         _thread.Start();
@@ -58,7 +58,7 @@ public sealed class LightEngine : IDisposable
     /// <summary>Thread-safe; takes a snapshot. Applied at the start of the next engine iteration.</summary>
     public void UpdateSettings(AppSettings s)
     {
-        _pendingSettings = s.Clone();
+        Volatile.Write(ref _pendingSettings, s.Clone());
         _wake.Set();
     }
 
@@ -91,19 +91,47 @@ public sealed class LightEngine : IDisposable
         lock (_previewLock) return (byte[])_preview.Clone();
     }
 
+    /// <summary>
+    /// Supervises the loop: an unexpected exception must never leave the LEDs frozen on a stale frame for months.
+    /// The loop is restarted with a growing back-off and the status shows the problem meanwhile.
+    /// </summary>
     private void Run()
     {
-        try { Loop(); }
-        catch (Exception ex) { Log.Error("Engine thread crashed", ex); }
+        int crashes = 0;
+        while (_running)
+        {
+            try
+            {
+                Loop();
+                return; // normal stop
+            }
+            catch (Exception ex)
+            {
+                crashes++;
+                Log.Error($"Engine loop failed (#{crashes}), restarting", ex);
+                Volatile.Write(ref _stats, GetStats() with { StatusText = "Problem — restarting the light engine…", OutputFps = 0 });
+                try
+                {
+                    if (_device.Status == DeviceStatus.Connected && _device.WaitForSlot(100))
+                        _device.Submit(new byte[(_settings.Layout.Zones.Count + _settings.Layout.Offset) * 3]);
+                }
+                catch { /* best effort */ }
+                _proc.Reset();
+                _wake.WaitOne(Math.Min(10_000, 500 * crashes));
+            }
+        }
     }
 
     private void Loop()
     {
         var clock = Stopwatch.StartNew();
-        float[] raw = Array.Empty<float>(), target = Array.Empty<float>(), output = Array.Empty<float>();
+        float[] raw = _lastRaw, target = Array.Empty<float>(), output = Array.Empty<float>();
         byte[] frame = Array.Empty<byte>(), lastSent = Array.Empty<byte>();
         double lastIter = 0, lastSendTime = -10;
         bool haveCapture = false, lastIterSent = true;
+        bool haveRaw = _haveLastRaw;          // 'raw' holds a real capture (survives pauses, mode switches, restarts)
+        int appliedVersion = -1;              // re-run the color adjustments when settings change on a still picture
+        double unavailableSince = -1;
         int ledCount = -1, offset = 0;
         LightMode lastMode = (LightMode)(-1);
 
@@ -117,11 +145,8 @@ public sealed class LightEngine : IDisposable
 
         while (_running)
         {
-            if (_pendingSettings is { } ns)
-            {
-                _pendingSettings = null;
+            if (Interlocked.Exchange(ref _pendingSettings, null) is { } ns)
                 ApplySettings(ns, initial: false);
-            }
             var s = _settings;
 
             int n = s.Layout.Zones.Count;
@@ -129,7 +154,7 @@ public sealed class LightEngine : IDisposable
             {
                 ledCount = n;
                 offset = s.Layout.Offset;
-                raw = new float[n * 3];
+                if (raw.Length != n * 3) { raw = _lastRaw = new float[n * 3]; haveRaw = _haveLastRaw = false; }
                 target = new float[n * 3];
                 output = new float[n * 3];
                 frame = new byte[(n + offset) * 3];
@@ -156,7 +181,11 @@ public sealed class LightEngine : IDisposable
                         lastSendTime = now;
                     }
                 }
-                lock (_previewLock) _preview = new byte[n * 3];
+                lock (_previewLock)
+                {
+                    if (_preview.Length != n * 3) _preview = new byte[n * 3];
+                    else Array.Clear(_preview);
+                }
                 _proc.Reset();
                 haveCapture = false;
                 if (now - lastStatsPublish > 0.5) { PublishStats(0, 0, capMs, procMs, paused, ov, force: true); lastStatsPublish = now; }
@@ -226,13 +255,31 @@ public sealed class LightEngine : IDisposable
                             capCount++;
                             raw.CopyTo(target, 0);
                             _proc.Adjust(target);
-                            haveCapture = true;
+                            haveCapture = haveRaw = _haveLastRaw = true;
+                            appliedVersion = _settingsVersion;
+                            unavailableSince = -1;
                         }
-                        else if (!haveCapture)
+                        else if (haveRaw && (!haveCapture || appliedVersion != _settingsVersion))
+                        {
+                            // Still picture after a pause / mode switch / settings change: re-use the last capture
+                            // (DXGI only delivers frames when something changes on screen).
+                            raw.CopyTo(target, 0);
+                            _proc.Adjust(target);
+                            haveCapture = true;
+                            appliedVersion = _settingsVersion;
+                        }
+                        else if (!haveRaw)
                         {
                             // Nothing captured yet (startup / secure desktop): keep LEDs dark rather than garbage.
                             Array.Clear(target);
                         }
+                        if (r == SampleResult.Unavailable)
+                        {
+                            // Lock screen / UAC / other session: don't freeze on the last picture forever; fade out.
+                            if (unavailableSince < 0) unavailableSince = now;
+                            else if (now - unavailableSince > 5) Array.Clear(target);
+                        }
+                        else if (r == SampleResult.NoChange) unavailableSince = -1;
                         remaining = _proc.Smooth(target, output, dt);
                         break;
                     }
@@ -275,15 +322,18 @@ public sealed class LightEngine : IDisposable
                 lastSendTime = now;
                 sentCount++;
             }
-            else if (ov is null && s.Mode == LightMode.Ambilight && haveCapture)
+
+            // Preview (pre white balance), cheap; no allocation in steady state
+            lock (_previewLock)
             {
-                // Static picture: nothing to send. Block in capture next iteration (handled by 'idle').
+                if (_preview.Length != n * 3) _preview = new byte[n * 3];
+                ColorProcessor.Raw(output, _preview);
             }
 
-            // Preview (pre white balance), cheap
-            var pv = new byte[n * 3];
-            ColorProcessor.Raw(output, pv);
-            lock (_previewLock) _preview = pv;
+            // Static color that has settled: nothing will change until settings do. Sleep (keep-alive stays 1/s).
+            // (Ambilight idles inside the capture call instead; Mood always animates.)
+            if (!changed && ov is null && s.Mode == LightMode.StaticColor && remaining <= 0)
+                _wake.WaitOne(500);
 
             if (now - statWindowStart >= 1.0)
             {
@@ -301,10 +351,16 @@ public sealed class LightEngine : IDisposable
     // Kept as a field so the idle decision can see the previous iteration's result.
     private float remainingLast = 1f;
 
+    private int _settingsVersion;
+    // Last real capture, kept across loop restarts (DXGI only delivers a frame when the screen changes).
+    private float[] _lastRaw = Array.Empty<float>();
+    private bool _haveLastRaw;
+
     private void ApplySettings(AppSettings s, bool initial)
     {
         SettingsSerializer.Normalize(s);
         _settings = s;
+        _settingsVersion++;
         _proc.Configure(s.Color);
         _sampler.Configure(s.Capture.MonitorId, s.Layout.Zones, s.Capture.BlackBarDetection);
         _device.Configure(s.Device, s.Layout.Zones.Count + s.Layout.Offset);

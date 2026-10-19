@@ -10,6 +10,7 @@ internal sealed class FakeSampler : IScreenSampler
 {
     public volatile float Value = 0.5f;
     public volatile bool Changed = true;
+    public volatile bool Unavailable;
     public int SampleCalls;
     public IReadOnlyList<MonitorInfo> GetMonitors() => [];
     public MonitorInfo? CurrentMonitor => null;
@@ -17,6 +18,7 @@ internal sealed class FakeSampler : IScreenSampler
     public SampleResult Sample(Span<float> destRgb, int timeoutMs)
     {
         Interlocked.Increment(ref SampleCalls);
+        if (Unavailable) { Thread.Sleep(Math.Max(16, timeoutMs)); return SampleResult.Unavailable; }
         if (!Changed) { if (timeoutMs > 0) Thread.Sleep(timeoutMs); return SampleResult.NoChange; }
         Changed = false;
         destRgb.Fill(Value);
@@ -199,6 +201,75 @@ public class LightEngineTests
             Thread.Sleep(20);
         }
         return e.GetStats();
+    }
+
+    [Fact]
+    public void Settings_change_applies_on_a_still_picture()
+    {
+        var dev = new FakeDevice();
+        var sampler = new FakeSampler { Value = 1f };
+        using var e = new LightEngine(sampler, dev);
+        var s = Settings();
+        e.Start(s);
+        WaitFor(dev, f => f[0] == 255);
+        s.Color.Brightness = 0.5; // the screen does not change at all
+        e.UpdateSettings(s);
+        WaitFor(dev, f => f[0] == 128);
+    }
+
+    [Fact]
+    public void Resume_after_pause_restores_last_picture_without_a_new_frame()
+    {
+        var dev = new FakeDevice();
+        var sampler = new FakeSampler { Value = 1f };
+        using var e = new LightEngine(sampler, dev);
+        e.Start(Settings());
+        WaitFor(dev, f => f[0] == 255);
+        e.SetPaused(PauseReason.DisplayOff, true);
+        WaitFor(dev, f => f.All(b => b == 0));
+        e.SetPaused(PauseReason.DisplayOff, false); // sampler.Changed stays false
+        WaitFor(dev, f => f[0] == 255);
+    }
+
+    [Fact]
+    public void Long_capture_outage_fades_to_black()
+    {
+        var dev = new FakeDevice();
+        var sampler = new FakeSampler { Value = 1f };
+        using var e = new LightEngine(sampler, dev);
+        e.Start(Settings());
+        WaitFor(dev, f => f[0] == 255);
+        sampler.Unavailable = true;
+        Thread.Sleep(1500);
+        while (dev.Frames.TryDequeue(out _)) { }
+        WaitFor(dev, f => f[0] == 255, 1500); // still the last picture shortly after (keep-alive)
+        WaitFor(dev, f => f.All(b => b == 0), 8000);
+    }
+
+    [Fact]
+    public void Engine_recovers_from_a_crashing_override()
+    {
+        var dev = new FakeDevice();
+        using var e = new LightEngine(new FakeSampler { Value = 0.2f }, dev);
+        e.Start(Settings());
+        WaitFor(dev, f => f[0] == 51);
+        var bomb = new ThrowingOverride();
+        e.SetOverride(bomb);
+        Thread.Sleep(300);
+        e.SetOverride(null);
+        WaitFor(dev, f => f[0] == 51, 3000);
+        Assert.True(bomb.Calls > 0);
+    }
+
+    private sealed class ThrowingOverride : ILedOverride
+    {
+        public int Calls;
+        public bool ApplyWhiteBalance => false;
+        public void Render(Span<float> rgb, int ledCount, double timeSeconds)
+        {
+            Calls++;
+            throw new InvalidOperationException("boom");
+        }
     }
 
     private sealed class SolidOverride : ILedOverride

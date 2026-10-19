@@ -93,15 +93,14 @@ public sealed class SystemIntegration : IDisposable
         return IntPtr.Zero;
     }
 
-    // SystemEvents are raised on their own thread.
+    // SystemEvents handlers run on the UI thread (they are marshalled to the thread that subscribed).
     private void OnPowerModeChanged(object? sender, PowerModeChangedEventArgs e)
     {
         switch (e.Mode)
         {
             case PowerModes.Suspend:
                 Log.Info("System is going to sleep");
-                _host.OnSuspend(true);
-                Thread.Sleep(150); // give the engine a moment to send black before the USB port powers down
+                _host.OnSuspend(true); // synchronously sends black and closes the port before USB powers down
                 break;
             case PowerModes.Resume:
                 Log.Info("System resumed");

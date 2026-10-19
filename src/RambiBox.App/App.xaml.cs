@@ -40,6 +40,24 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        try
+        {
+            StartupCore(e);
+        }
+        catch (Exception ex)
+        {
+            // Never live on as a zombie (no tray icon, single-instance mutex held): log, tell the user, exit.
+            Log.Error("Startup failed", ex);
+            Log.Flush();
+            try { Host?.Engine.Dispose(); } catch { }
+            MessageBox.Show($"RambiBox could not start:\n\n{ex.Message}\n\nDetails are in {Log.FilePath}",
+                "RambiBox", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown(1);
+        }
+    }
+
+    private void StartupCore(StartupEventArgs e)
+    {
         var options = AppOptions.Parse(e.Args);
         // A simulated (development) instance may run next to the real one.
         string suffix = options.Simulate ? ".Simulate" : "";
@@ -241,6 +259,11 @@ public partial class App : Application
     private static void OnDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
         Log.Error($"Unhandled exception (terminating: {e.IsTerminating})", e.ExceptionObject as Exception);
+        if (e.IsTerminating)
+        {
+            // Best effort: don't leave the LEDs lit when the process dies.
+            try { ((App)Current).Host?.Device.Blackout(); } catch { }
+        }
         Log.Flush();
     }
 

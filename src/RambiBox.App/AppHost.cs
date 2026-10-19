@@ -168,10 +168,17 @@ public sealed class AppHost : IDisposable
         Commit(sender);
     }
 
+    private readonly object _saveLock = new();
+
     private void SaveNow()
     {
-        var s = Interlocked.Exchange(ref _pendingSave, null);
-        if (s is not null) TrySave(s);
+        // Take the snapshot inside the lock so an older snapshot can never be written after a newer one
+        // (timer callback vs. FlushSave at exit).
+        lock (_saveLock)
+        {
+            var s = Interlocked.Exchange(ref _pendingSave, null);
+            if (s is not null) TrySave(s);
+        }
     }
 
     private void TrySave(AppSettings s)
@@ -194,9 +201,20 @@ public sealed class AppHost : IDisposable
             Log.Info($"(simulate) Start with Windows = {Settings.General.StartWithWindows}; registry left untouched");
             return;
         }
-        bool enabled = Settings.General.StartWithWindows;
-        Task.Run(() => StartupRegistration.Sync(enabled));
+        Volatile.Write(ref _startupWanted, Settings.General.StartWithWindows ? 1 : 0);
+        if (Interlocked.Exchange(ref _startupSyncQueued, 1) == 1) return; // a sync is already queued; it reads the latest value
+        Task.Run(() =>
+        {
+            lock (_startupSyncLock)
+            {
+                Volatile.Write(ref _startupSyncQueued, 0);
+                StartupRegistration.Sync(Volatile.Read(ref _startupWanted) == 1);
+            }
+        });
     }
+
+    private readonly object _startupSyncLock = new();
+    private int _startupWanted, _startupSyncQueued;
 
     /// <summary>Called by the calibration (any thread): apply + persist a new white balance.</summary>
     public void ApplyWhiteBalance(double r, double g, double b)
@@ -330,11 +348,21 @@ public sealed class AppHost : IDisposable
     public void OnSuspend(bool suspended)
     {
         Engine.SetPaused(PauseReason.Suspended, suspended);
-        _dispatcher.BeginInvoke(() => DeviceStatusChanged?.Invoke());
-        if (!suspended)
+        if (suspended)
         {
+            // Don't rely on the engine thread getting a turn before the system sleeps (it may be blocked in a
+            // capture wait): send black and close the port synchronously, so boards that keep USB standby power
+            // don't stay lit all night.
+            try { Device.Blackout(); } catch (Exception ex) { Log.Warn($"Blackout before sleep failed: {ex.Message}"); }
+        }
+        else
+        {
+            // Blackout() leaves the device stopped until it is configured again.
+            try { Device.Configure(Settings.Device, Settings.Layout.Zones.Count + Settings.Layout.Offset); }
+            catch (Exception ex) { Log.Warn($"Restarting the LED device after resume failed: {ex.Message}"); }
             try { Device.Rescan(); } catch { /* ignore */ }
         }
+        _dispatcher.BeginInvoke(() => DeviceStatusChanged?.Invoke());
     }
 
     private void ApplyPauses()
