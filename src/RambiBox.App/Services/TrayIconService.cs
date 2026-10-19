@@ -201,9 +201,8 @@ public sealed class TrayIconService : IDisposable
     private void UpdateToolTip()
     {
         var st = _host.Engine.GetStats();
-        string text = !_host.Settings.Enabled ? "Lights off" : st.StatusText;
-        if (st.DeviceStatus == DeviceStatus.PortBusy && _host.AmbiBoxRunning)
-            text = $"{st.PortName} is in use by AmbiBox";
+        // same wording as the Home page, for every device family ("Connected to WLED-TV (192.168.2.40) · 60 fps")
+        string text = !_host.Settings.Enabled ? "Lights off" : DeviceStatusFormatter.Describe(_host, st).Text;
         text = $"RambiBox – {text}";
         if (text.Length > 127) text = text[..126] + "…";
         if (_icon.ToolTipText != text) _icon.ToolTipText = text;

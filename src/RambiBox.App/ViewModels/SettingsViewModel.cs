@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Windows.Media;
 using RambiBox.Core.Config;
+using RambiBox.Core.Devices;
 
 namespace RambiBox.App.ViewModels;
 
@@ -29,6 +30,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     {
         if (ReferenceEquals(sender, this)) return;
         _customLayout = null;
+        if (sender is AppHost) ClearDeviceDrafts(); // e.g. "Use this" device: show the new values
         RefreshAll();
     }
 
@@ -344,6 +346,237 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     {
         get => S.Device.ColorOrder;
         set => Set(S.Device.ColorOrder, value, v => S.Device.ColorOrder = v);
+    }
+
+    /// <summary>
+    /// The controller family. Switching applies live (Commit → engine → SwitchingLedDevice swaps the driver); the
+    /// name/id of a previously found device no longer apply, and an untouched baud rate follows the new protocol.
+    /// </summary>
+    public DeviceType DeviceType
+    {
+        get => S.Device.Type;
+        set
+        {
+            var d = S.Device;
+            if (d.Type == value || !Enum.IsDefined(value)) return;
+            d.BaudRate = DeviceCatalog.BaudAfterTypeChange(d.Type, value, d.BaudRate);
+            d.Type = value;
+            d.Name = null;
+            d.DeviceId = null;
+            ClearDeviceDrafts();
+            _host.Commit(this);
+            RefreshAll(); // every type-dependent property (visibility, presets, texts)
+            DeviceTypeChanged?.Invoke();
+        }
+    }
+
+    /// <summary>Raised after the user picked another device type.</summary>
+    public event Action? DeviceTypeChanged;
+
+    private DeviceTypeInfo TypeInfo => DeviceCatalog.Get(S.Device.Type);
+    public string DeviceTypeDescription => TypeInfo.Description;
+    public string DeviceTypeGlyph => Services.DeviceStatusFormatter.Glyph(S.Device.Type);
+    public bool IsSerialType => TypeInfo.IsSerial;
+    public bool IsNetworkType => TypeInfo.IsNetwork;
+    public bool IsLightpackType => S.Device.Type == DeviceType.Lightpack;
+    public bool IsWledType => S.Device.Type == DeviceType.Wled;
+    public bool IsE131Type => S.Device.Type == DeviceType.E131;
+    public bool IsAlienFxType => S.Device.Type == DeviceType.AlienFx;
+    public bool IsVirtualType => S.Device.Type == DeviceType.Virtual;
+    /// <summary>Raw pixel protocols send the colors in the strip's own order; WLED / Lightpack reorder themselves.</summary>
+    public bool ShowColorOrder => IsSerialType || S.Device.Type is DeviceType.Ddp or DeviceType.E131;
+
+    public IReadOnlyList<string> BaudPresets => [.. DeviceCatalog.BaudPresets(S.Device.Type).Select(b => b.ToString())];
+
+    public string BaudRateDescription => S.Device.Type switch
+    {
+        DeviceType.Awa => "Speed of the serial link. HyperSerial firmware usually runs at 2000000.",
+        DeviceType.Ardulight => "Speed of the serial link. Must match the Ardulight sketch (115200 by default).",
+        DeviceType.Tpm2 => "Speed of the serial link. Must match your controller's firmware.",
+        _ => "Speed of the serial link. Must match your controller's firmware (115200 for most Adalight sketches).",
+    };
+
+    // ---- network devices (WLED, DDP, E1.31). Text fields keep an invalid entry visible next to its error message.
+
+    private string? _hostDraft, _hostError, _portDraft, _portError, _universeDraft, _universeError;
+
+    private void ClearDeviceDrafts()
+    {
+        _hostDraft = _hostError = _portDraft = _portError = _universeDraft = _universeError = null;
+    }
+
+    /// <summary>IP address or host name (validated; committed when valid).</summary>
+    public string HostText
+    {
+        get => _hostDraft ?? S.Device.Host ?? "";
+        set
+        {
+            var error = DeviceValidation.ValidateHost(value, out var host);
+            if (error is not null)
+            {
+                _hostDraft = value ?? "";
+                SetError(ref _hostError, error, nameof(HostError));
+                return;
+            }
+            _hostDraft = null;
+            SetError(ref _hostError, null, nameof(HostError));
+            if (string.Equals(S.Device.Host, host, StringComparison.Ordinal)) { OnPropertyChanged(); return; }
+            S.Device.Host = host;
+            S.Device.Name = null;     // a hand-typed address is no longer the discovered device
+            S.Device.DeviceId = null;
+            _host.Commit(this);
+            OnPropertyChanged();
+        }
+    }
+
+    public string? HostError => _hostError;
+
+    public string HostDescription => S.Device.Type switch
+    {
+        DeviceType.Wled => "IP address or name of your WLED controller, e.g. 192.168.1.40 or wled-tv.local. Find devices fills this in.",
+        DeviceType.E131 => "IP address of the E1.31 controller (unicast). Not needed with multicast.",
+        _ => "IP address or host name of the controller, e.g. 192.168.1.40.",
+    };
+
+    public int DefaultNetworkPort => DeviceCatalog.DefaultNetworkPort(S.Device.Type);
+
+    /// <summary>UDP port; empty = the protocol default.</summary>
+    public string NetworkPortText
+    {
+        get => _portDraft ?? (S.Device.NetworkPort == 0 ? "" : S.Device.NetworkPort.ToString());
+        set
+        {
+            var error = DeviceValidation.ValidatePort(value, DefaultNetworkPort, out int port);
+            if (error is not null)
+            {
+                _portDraft = value ?? "";
+                SetError(ref _portError, error, nameof(NetworkPortError));
+                return;
+            }
+            _portDraft = null;
+            SetError(ref _portError, null, nameof(NetworkPortError));
+            if (S.Device.NetworkPort != port)
+            {
+                S.Device.NetworkPort = port;
+                _host.Commit(this);
+            }
+            OnPropertyChanged();
+        }
+    }
+
+    public string? NetworkPortError => _portError;
+
+    public string UdpPortDescription => S.Device.Type switch
+    {
+        DeviceType.Wled => $"Leave empty for WLED's realtime port ({DefaultNetworkPort}). Change it only if you changed it in WLED.",
+        DeviceType.Ddp => $"Leave empty for the DDP port ({DefaultNetworkPort}).",
+        DeviceType.E131 => $"Leave empty for the E1.31 port ({DefaultNetworkPort}).",
+        _ => "",
+    };
+
+    public NetworkProtocol Protocol
+    {
+        get => S.Device.Protocol;
+        set => Set(S.Device.Protocol, value, v => S.Device.Protocol = v, nameof(Protocol), nameof(ProtocolDescription));
+    }
+
+    /// <summary>LEDs on the strip including skipped ones (what the controller receives).</summary>
+    private int StripLeds => S.Layout.Zones.Count + S.Layout.Offset;
+
+    public string ProtocolDescription
+    {
+        get
+        {
+            int n = StripLeds;
+            string auto = n <= 255 ? "WARLS" : n <= 490 ? "DRGB" : "DNRGB";
+            return S.Device.Protocol == NetworkProtocol.Auto
+                ? $"WLED's realtime UDP format. Automatic uses {auto} for your {n} LEDs."
+                : "WLED's realtime UDP format. WARLS handles up to 255 LEDs, DRGB up to 490, DNRGB any number.";
+        }
+    }
+
+    /// <summary>1..255 seconds (255 = keep the realtime colors until WLED restarts).</summary>
+    public int WledTimeoutSeconds
+    {
+        get => S.Device.WledTimeoutSeconds;
+        set => Set(S.Device.WledTimeoutSeconds, Math.Clamp(value, 1, 255), v => S.Device.WledTimeoutSeconds = v);
+    }
+
+    public bool E131Multicast
+    {
+        get => S.Device.E131Multicast;
+        set => Set(S.Device.E131Multicast, value, v => S.Device.E131Multicast = v, nameof(E131Multicast), nameof(HostEnabled));
+    }
+
+    /// <summary>The address is not used with E1.31 multicast.</summary>
+    public bool HostEnabled => !(S.Device.Type == DeviceType.E131 && S.Device.E131Multicast);
+
+    public string E131UniverseText
+    {
+        get => _universeDraft ?? S.Device.E131Universe.ToString();
+        set
+        {
+            var error = DeviceValidation.ValidateUniverse(value, out int u);
+            if (error is not null)
+            {
+                _universeDraft = value ?? "";
+                SetError(ref _universeError, error, nameof(E131UniverseError));
+                return;
+            }
+            _universeDraft = null;
+            SetError(ref _universeError, null, nameof(E131UniverseError));
+            if (S.Device.E131Universe != u)
+            {
+                S.Device.E131Universe = u;
+                _host.Commit(this);
+            }
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(E131UniverseDescription));
+        }
+    }
+
+    public string? E131UniverseError => _universeError;
+
+    public string E131UniverseDescription =>
+        $"First DMX universe (170 LEDs each). Your {StripLeds} LEDs use {DeviceCatalog.E131UniverseRange(S.Device.E131Universe, StripLeds)}.";
+
+    /// <summary>Lightpack (and other multi-device families): "" = the first device found, otherwise its id.</summary>
+    public string SelectedDeviceId
+    {
+        get => S.Device.DeviceId ?? "";
+        set
+        {
+            if (value is null) return; // list being rebuilt
+            Set(S.Device.DeviceId ?? "", value, v =>
+            {
+                S.Device.DeviceId = v.Length == 0 ? null : v;
+                S.Device.Name = null;
+            });
+        }
+    }
+
+    /// <summary>Re-announces <see cref="SelectedDeviceId"/> (after the device list was rebuilt).</summary>
+    public void RefreshDeviceId() => OnPropertyChanged(nameof(SelectedDeviceId));
+
+    private void SetError(ref string? field, string? value, string name)
+    {
+        if (field == value) return;
+        field = value;
+        OnPropertyChanged(name);
+    }
+
+    /// <summary>
+    /// Sets the generated layout to <paramref name="stripLeds"/> LEDs on the strip, keeping the proportions of the sides
+    /// (replaces hand-made zones).
+    /// </summary>
+    public void ResizeLayoutTo(int stripLeds)
+    {
+        LayoutScaling.ResizeTo(S.Layout, stripLeds);
+        _customLayout = false;
+        LayoutUnlocked = false;
+        _host.Commit(this);
+        RefreshAll();
+        LayoutChanged?.Invoke();
     }
 
     // ------------------------------------------------------------------ general

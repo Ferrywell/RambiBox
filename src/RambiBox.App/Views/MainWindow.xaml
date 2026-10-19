@@ -94,6 +94,32 @@
                         <Button Content="Undo" Command="{Binding UndoAutostartCommand}" HorizontalAlignment="Left" />
                     </c:InfoBar>
 
+                    <!-- background device detection (the configured controller didn't connect) -->
+                    <c:InfoBar Title="{Binding AutoDetectTitle}" Message="{Binding AutoDetectMessage}" IsClosable="True"
+                               CloseCommand="{Binding DismissAutoDetectCommand}"
+                               Visibility="{Binding ShowAutoDetectBar, Converter={StaticResource BoolToVisibility}}">
+                        <c:InfoBar.Style>
+                            <Style TargetType="c:InfoBar" BasedOn="{StaticResource {x:Type c:InfoBar}}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding AutoDetectSwitched}" Value="True">
+                                        <Setter Property="Severity" Value="Success" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </c:InfoBar.Style>
+                        <WrapPanel>
+                            <Button Style="{DynamicResource AccentButtonStyle}" Content="{Binding AutoDetectResizeLabel}" Margin="0,0,8,4"
+                                    Command="{Binding AutoDetectResizeLayoutCommand}"
+                                    Visibility="{Binding ShowAutoDetectResize, Converter={StaticResource BoolToVisibility}}" />
+                            <Button Content="Device settings" Command="{Binding ChooseDetectedDeviceCommand}" Margin="0,0,8,4"
+                                    Visibility="{Binding AutoDetectSwitched, Converter={StaticResource BoolToVisibility}}" />
+                            <Button Style="{DynamicResource AccentButtonStyle}" Content="Use it" Command="{Binding UseDetectedDeviceCommand}" Margin="0,0,8,4"
+                                    Visibility="{Binding AutoDetectSuggests, Converter={StaticResource BoolToVisibility}}" />
+                            <Button Style="{DynamicResource AccentButtonStyle}" Content="Choose…" Command="{Binding ChooseDetectedDeviceCommand}" Margin="0,0,8,4"
+                                    Visibility="{Binding AutoDetectChoose, Converter={StaticResource BoolToVisibility}}" />
+                        </WrapPanel>
+                    </c:InfoBar>
+
                     <c:InfoBar Severity="Success" Title="Imported your AmbiBox settings:" Message="{Binding ImportSummary}" IsClosable="True"
                                CloseCommand="{Binding DismissImportCommand}"
                                Visibility="{Binding ShowImportBar, Converter={StaticResource BoolToVisibility}}" />

@@ -93,6 +93,11 @@ public sealed class DeviceSettings
     /// from discovery, … Null = first one found.
     /// </summary>
     public string? DeviceId { get; set; }
+    /// <summary>
+    /// Friendly name of the controller chosen from "Find devices" (e.g. "WLED-TV (192.168.2.40)"), only for status
+    /// texts. Null = describe it by port/host. Cleared when the type, host or device is changed by hand.
+    /// </summary>
+    public string? Name { get; set; }
 }
 
 /// <summary>LED controller families (matches what Prismatik supports on Windows, plus DDP and E1.31).</summary>

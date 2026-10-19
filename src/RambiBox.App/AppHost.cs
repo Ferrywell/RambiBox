@@ -26,6 +26,12 @@ public sealed record CalibrationSnapshot((double R, double G, double B) WhiteBal
     }
 }
 
+/// <summary>Result of the background device detection, shown as an InfoBar (and a tray notification).</summary>
+/// <param name="Action">Switched automatically, suggestion, or several to choose from.</param>
+/// <param name="Device">The device switched to / suggested (null for <see cref="AutoSwitchAction.Choose"/>).</param>
+/// <param name="Count">Number of controllers found.</param>
+public sealed record AutoDetectNotice(AutoSwitchAction Action, DiscoveredDevice? Device, int Count);
+
 /// <summary>Command line options.</summary>
 /// <param name="Demo"><c>--demo</c>: simulated LED device plus a synthetic movie scene instead of the real desktop,
 /// with fresh default settings in a temporary folder (screenshots, demos). Implies <paramref name="Simulate"/>.</param>
@@ -61,6 +67,8 @@ public sealed class AppHost : IDisposable
     private AppSettings? _pendingSave;
     private bool _displayOff, _locked, _ledsShutDown, _lastStartWithWindows;
     private int _disposed;
+    private readonly bool _firstRunWithoutImport;
+    private CancellationTokenSource? _discoveryCts;
 
     public AppOptions Options { get; }
     public SettingsStore Store { get; }
@@ -138,6 +146,7 @@ public sealed class AppHost : IDisposable
             Settings.Layout.Zones = LayoutGenerator.Generate(Settings.Layout);
         SettingsSerializer.Normalize(Settings);
         if (FirstRun) TrySave(Settings.Clone());
+        _firstRunWithoutImport = FirstRun && ImportSummary is null;
 
         // Windows Graphics Capture by default (Desktop Duplication can make Chromium stutter), switchable live.
         Sampler = options.Demo ? new DemoScreenSampler() : new SwitchingScreenSampler();
@@ -158,6 +167,7 @@ public sealed class AppHost : IDisposable
         Engine.Start(Settings);
         SyncStartup();
         _ = RefreshAmbiBoxAsync();
+        if (!Options.Demo) _ = AutoDetectAsync(); // the demo shows a clean, already connected setup
     }
 
     // ------------------------------------------------------------------ settings
@@ -458,6 +468,140 @@ public sealed class AppHost : IDisposable
         Log.Flush(500);
     }
 
+    // ------------------------------------------------------------------ device discovery
+
+    /// <summary>How long one "Find devices" scan may take.</summary>
+    public static readonly TimeSpan DiscoveryTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>Controllers found by the last scan (UI thread).</summary>
+    public IReadOnlyList<DiscoveredDevice> DiscoveredDevices { get; private set; } = [];
+    /// <summary>True once a scan has completed in this session (to tell "nothing found" from "not searched yet").</summary>
+    public bool HasDiscovered { get; private set; }
+    public bool Discovering => _discoveryCts is not null;
+    /// <summary>Raised on the UI thread when a scan starts or finishes.</summary>
+    public event Action? DiscoveryChanged;
+
+    /// <summary>What the background detection found (null = nothing to say).</summary>
+    public AutoDetectNotice? AutoDetectNotice { get; private set; }
+    public event Action? AutoDetectNoticeChanged;
+
+    private Task<IReadOnlyList<DiscoveredDevice>>? _discoveryTask;
+
+    /// <summary>
+    /// Runs every discovery service (USB serial, HID, network) for up to <see cref="DiscoveryTimeout"/> and stores the
+    /// results in <see cref="DiscoveredDevices"/>. UI thread. A scan already running is joined instead of restarted.
+    /// In <c>--simulate</c> nothing real is touched (<see cref="SimulatedDiscovery"/>).
+    /// </summary>
+    public Task<IReadOnlyList<DiscoveredDevice>> DiscoverAsync()
+    {
+        if (_discoveryTask is not null && !_discoveryTask.IsCompleted) return _discoveryTask;
+        _discoveryTask = DiscoverCoreAsync();
+        return _discoveryTask;
+    }
+
+    private async Task<IReadOnlyList<DiscoveredDevice>> DiscoverCoreAsync()
+    {
+        var cts = new CancellationTokenSource();
+        _discoveryCts = cts;
+        DiscoveryChanged?.Invoke();
+        try
+        {
+            Log.Info("Looking for LED controllers…");
+            var found = Options.Simulate
+                ? await SimulatedDiscovery.DiscoverAsync(DiscoveryTimeout, cts.Token)
+                : await LedDeviceFactory.DiscoverAllAsync(DiscoveryTimeout, cts.Token);
+            cts.Token.ThrowIfCancellationRequested();
+            // the same controller can be reported twice (e.g. by two services or network interfaces)
+            var unique = found.GroupBy(d => (d.Type, Id: d.Id.ToUpperInvariant())).Select(g => g.First()).ToList();
+            Log.Info(unique.Count == 0 ? "No LED controllers found"
+                : $"Found {unique.Count} LED controller(s): {string.Join(", ", unique.Select(d => $"{d.DisplayName} [{d.Type}]"))}");
+            DiscoveredDevices = unique;
+            HasDiscovered = true;
+            return unique;
+        }
+        catch (OperationCanceledException)
+        {
+            Log.Info("Device search cancelled");
+            return DiscoveredDevices;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Device search failed: {ex.Message}");
+            return DiscoveredDevices;
+        }
+        finally
+        {
+            _discoveryCts = null;
+            cts.Dispose();
+            DiscoveryChanged?.Invoke();
+        }
+    }
+
+    /// <summary>Stops a running scan (keeps the previous results).</summary>
+    public void CancelDiscovery()
+    {
+        try { _discoveryCts?.Cancel(); }
+        catch (ObjectDisposedException) { /* finished meanwhile */ }
+    }
+
+    /// <summary>Switches to a controller from <see cref="DiscoveredDevices"/> (type, port/host, id) and commits. UI thread.</summary>
+    public void UseDevice(DiscoveredDevice device)
+    {
+        var d = Settings.Device;
+        var oldType = d.Type;
+        device.ApplyTo(d);
+        d.Name = device.DisplayName;
+        d.BaudRate = DeviceCatalog.BaudAfterTypeChange(oldType, device.Type, d.BaudRate);
+        Log.Info($"Using {device.DisplayName} ({DeviceCatalog.Get(device.Type).Name})");
+        SetAutoDetectNotice(null);
+        Commit(this);
+    }
+
+    public void DismissAutoDetectNotice() => SetAutoDetectNotice(null);
+
+    private void SetAutoDetectNotice(AutoDetectNotice? notice)
+    {
+        if (notice == AutoDetectNotice) return;
+        AutoDetectNotice = notice;
+        AutoDetectNoticeChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Once per start: when the configured controller hasn't connected after ~10 s, scan for others. Switches
+    /// automatically only when nothing was set up yet and exactly one controller answers (see
+    /// <see cref="DeviceAutoSwitchPolicy"/>); otherwise it only tells the user. Adalight auto-detect keeps running.
+    /// </summary>
+    private async Task AutoDetectAsync()
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(10));
+            if (Volatile.Read(ref _disposed) != 0 || Device.Status == DeviceStatus.Connected) return;
+            Log.Info("The LED controller hasn't connected yet; looking for other controllers");
+            var found = await DiscoverAsync();
+            if (Volatile.Read(ref _disposed) != 0 || Device.Status == DeviceStatus.Connected) return; // it came up meanwhile
+            var decision = DeviceAutoSwitchPolicy.Decide(Settings.Device, _firstRunWithoutImport, found,
+                LedDeviceFactory.IsSupported);
+            switch (decision.Action)
+            {
+                case AutoSwitchAction.None:
+                    return;
+                case AutoSwitchAction.Switch:
+                    Log.Info($"Switching automatically to {decision.Device!.DisplayName}");
+                    UseDevice(decision.Device);
+                    SetAutoDetectNotice(new AutoDetectNotice(AutoSwitchAction.Switch, decision.Device, 1));
+                    break;
+                default:
+                    SetAutoDetectNotice(new AutoDetectNotice(decision.Action, decision.Device, decision.Candidates.Count));
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Automatic device detection failed: {ex.Message}");
+        }
+    }
+
     // ------------------------------------------------------------------ AmbiBox hand-over
 
     public async Task RefreshAmbiBoxAsync()
@@ -505,6 +649,7 @@ public sealed class AppHost : IDisposable
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        CancelDiscovery();
         FlushSave();
         _saveTimer.Dispose();
         Device.DeviceFound -= OnDeviceFound;

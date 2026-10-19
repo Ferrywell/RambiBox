@@ -1,4 +1,5 @@
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Threading;
 using RambiBox.App.ViewModels;
 
@@ -21,6 +22,15 @@ public partial class DevicePage : UserControl
             RefreshLog();
         };
         Unloaded += (_, _) => vm.Host.Logs.LineAdded -= OnLine;
+    }
+
+    /// <summary>Text boxes commit on focus loss; Enter commits (and validates) right away too.</summary>
+    private void OnCommitOnEnter(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || sender is not TextBox box) return;
+        box.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
+        box.SelectAll();
+        e.Handled = true;
     }
 
     private void OnLine(string line)

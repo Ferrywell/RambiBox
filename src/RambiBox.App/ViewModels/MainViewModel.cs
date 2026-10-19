@@ -32,6 +32,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         _host = host;
         S = new SettingsViewModel(host);
+        Setup = new DeviceSetupViewModel(host, S);
 
         NavItems =
         [
@@ -86,6 +87,21 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         AllowFirewallCommand = new RelayCommand(async () => await AllowFirewallAsync(), () => !_firewallBusy);
         ResetPhoneCertCommand = new RelayCommand(async () => await ResetPhoneCertAsync(), () => !_host.CalibrationActive);
         OpenUrlCommand = new RelayCommand(p => AppInfo.OpenUrl(p as string));
+        DismissAutoDetectCommand = new RelayCommand(_host.DismissAutoDetectNotice);
+        ChooseDetectedDeviceCommand = new RelayCommand(() => NavigateCommand.Execute("device"));
+        UseDetectedDeviceCommand = new RelayCommand(() =>
+        {
+            if (_host.AutoDetectNotice?.Device is { } d) Setup.Use(d);
+            NavigateCommand.Execute("device");
+        });
+        AutoDetectResizeLayoutCommand = new RelayCommand(() =>
+        {
+            if (AutoDetectLedCount is not int n) return;
+            S.ResizeLayoutTo(n);
+            _autoDetectLayoutDone = true;
+            OnAutoDetectNoticeChanged();
+        }, () => AutoDetectLedCount is not null);
+        _host.AutoDetectNoticeChanged += OnAutoDetectNoticeChanged;
 
         RefreshPortsAsync();
         RefreshMonitors();
@@ -93,7 +109,76 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }
 
     public SettingsViewModel S { get; }
+    /// <summary>Device page: type picker, Find devices, LED count offer.</summary>
+    public DeviceSetupViewModel Setup { get; }
     public AppHost Host => _host;
+
+    // ------------------------------------------------------------------ background device detection (InfoBar)
+
+    private bool _autoDetectLayoutDone;
+
+    public bool ShowAutoDetectBar => _host.AutoDetectNotice is not null;
+    public bool AutoDetectSwitched => _host.AutoDetectNotice?.Action == AutoSwitchAction.Switch;
+    public bool AutoDetectSuggests => _host.AutoDetectNotice?.Action == AutoSwitchAction.Suggest;
+    public bool AutoDetectChoose => _host.AutoDetectNotice?.Action == AutoSwitchAction.Choose;
+
+    public string AutoDetectTitle => _host.AutoDetectNotice switch
+    {
+        { Action: AutoSwitchAction.Switch, Device: { } d } => $"Found {d.DisplayName} – using it.",
+        { Action: AutoSwitchAction.Suggest, Device: { } d } => $"Found {d.DisplayName}.",
+        { Count: var n } => $"Found {n} LED controllers – choose one.",
+        null => "",
+    };
+
+    public string AutoDetectMessage
+    {
+        get
+        {
+            var n = _host.AutoDetectNotice;
+            if (n is null) return "";
+            if (n.Action == AutoSwitchAction.Switch)
+            {
+                if (_autoDetectLayoutDone)
+                    return $"The LED layout now has {_host.Settings.Layout.Zones.Count + _host.Settings.Layout.Offset} LEDs.";
+                return AutoDetectLedCount is int c
+                    ? DeviceSetupViewModel.LayoutOfferText(c, _host.Settings.Layout, S.IsCustomLayout)
+                    : "You can change this on the Device page.";
+            }
+            return n.Action == AutoSwitchAction.Suggest
+                ? $"Your {DeviceCatalog.Get(_host.Settings.Device.Type).Name} controller isn't responding. Use this one instead?"
+                : "Your LED controller isn't responding. Pick the one to use on the Device page.";
+        }
+    }
+
+    /// <summary>LED count of the auto-selected controller when it differs from the layout.</summary>
+    public int? AutoDetectLedCount
+    {
+        get
+        {
+            if (_autoDetectLayoutDone || _host.AutoDetectNotice is not { Action: AutoSwitchAction.Switch, Device.LedCount: int n } || n <= 0)
+                return null;
+            var l = _host.Settings.Layout;
+            return n == l.Zones.Count + l.Offset ? null : n;
+        }
+    }
+
+    public string AutoDetectResizeLabel => AutoDetectLedCount is int n ? $"Set LED layout to {n} LEDs" : "";
+    public bool ShowAutoDetectResize => AutoDetectLedCount is not null;
+
+    public ICommand DismissAutoDetectCommand { get; }
+    public ICommand ChooseDetectedDeviceCommand { get; }
+    public ICommand UseDetectedDeviceCommand { get; }
+    public ICommand AutoDetectResizeLayoutCommand { get; }
+
+    private void OnAutoDetectNoticeChanged()
+    {
+        if (_host.AutoDetectNotice is null) _autoDetectLayoutDone = false;
+        foreach (var p in new[] { nameof(ShowAutoDetectBar), nameof(AutoDetectSwitched), nameof(AutoDetectSuggests), nameof(AutoDetectChoose),
+                                  nameof(AutoDetectTitle), nameof(AutoDetectMessage), nameof(AutoDetectLedCount), nameof(AutoDetectResizeLabel),
+                                  nameof(ShowAutoDetectResize) })
+            OnPropertyChanged(p);
+        CommandManager.InvalidateRequerySuggested();
+    }
     /// <summary>Shows the "SIMULATED" badge (not in <c>--demo</c>, which is meant for clean screenshots).</summary>
     public bool IsSimulated => _host.Options.Simulate && !_host.Options.Demo;
 
@@ -159,83 +244,33 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         var st = _host.Engine.GetStats();
         var s = _host.Settings;
-        string port = st.PortName ?? "the LED controller";
-        string text, detail = "";
-        StatusLevel level;
-        bool closeAmbiBox = false;
-
-        switch (st.DeviceStatus)
-        {
-            case DeviceStatus.Connected:
-                if (st.OverrideActive)
-                {
-                    text = $"Showing a test pattern on {port}";
-                    level = StatusLevel.Busy;
-                }
-                else if (!s.Enabled)
-                {
-                    text = "Lights are off";
-                    detail = $"Connected on {port}";
-                    level = StatusLevel.Off;
-                }
-                else if ((st.Paused & ~PauseReason.UserOff) != PauseReason.None)
-                {
-                    text = $"Paused – {DescribePause(st.Paused)}";
-                    detail = $"Connected on {port}";
-                    level = StatusLevel.Off;
-                }
-                else
-                {
-                    string fps = st.OutputFps >= 1.5 ? $"{st.OutputFps:0} fps" : "idle (nothing changing)";
-                    text = $"Connected on {port} · {fps}";
-                    if (s.Mode == LightMode.Ambilight && st.CaptureMs > 0) text += $" · capture {st.CaptureMs:0.0} ms";
-                    level = StatusLevel.Good;
-                }
-                break;
-            case DeviceStatus.PortBusy:
-                if (_host.AmbiBoxRunning)
-                {
-                    text = $"{port} is in use by AmbiBox";
-                    closeAmbiBox = true;
-                }
-                else text = $"{port} is in use by another program";
-                detail = "RambiBox keeps retrying and connects as soon as the port is free.";
-                level = StatusLevel.Problem;
-                break;
-            case DeviceStatus.Searching:
-                text = "Looking for the LED controller…";
-                detail = "Plug in the USB cable of your LED strip. RambiBox finds it automatically.";
-                level = StatusLevel.Busy;
-                break;
-            default:
-                text = "Starting…";
-                level = StatusLevel.Busy;
-                break;
-        }
-
-        SetStatus(text, detail, level, closeAmbiBox);
+        var line = DeviceStatusFormatter.Describe(_host, st);
+        SetStatus(line.Text, line.Detail, line.Level, line.CloseAmbiBox);
 
         // Device page details
-        DeviceTitle = st.DeviceStatus switch
+        bool serial = DeviceCatalog.IsSerial(s.Device.Type);
+        DeviceTitle = DeviceStatusFormatter.IsUnsupported(_host) ? "Not supported yet" : st.DeviceStatus switch
         {
-            DeviceStatus.Connected => "Connected",
-            DeviceStatus.PortBusy => "Port in use",
+            DeviceStatus.Connected => s.Device.Type == DeviceType.Virtual ? "Virtual device" : "Connected",
+            DeviceStatus.PortBusy => serial ? "Port in use" : "In use by another program",
             DeviceStatus.Searching => "Searching…",
             _ => "Not started",
         };
-        var info = _ports.FirstOrDefault(p => string.Equals(p.PortName, st.PortName, StringComparison.OrdinalIgnoreCase));
-        DeviceDescription = info is not null ? $"{info.Description} ({info.PortName})"
-            : st.PortName is not null ? st.PortName : "No LED controller found yet";
+        DeviceDescription = DeviceStatusFormatter.DescribeDevice(_host, st, _ports);
+        DeviceGlyph = DeviceStatusFormatter.Glyph(s.Device.Type);
         LinkFpsText = st.LinkMaxFps > 0 ? $"{st.LinkMaxFps:0} fps" : "–";
         OutputFpsText = st.DeviceStatus == DeviceStatus.Connected ? $"{st.OutputFps:0} fps" : "–";
         CaptureText = st.CaptureMs > 0 && s.Mode == LightMode.Ambilight
             ? $"{st.CaptureFps:0} fps · {st.CaptureMs:0.0} ms" : "–";
         MonitorText = st.Monitor is { } m ? $"{m.FriendlyName}{(m.IsHdr ? " · HDR" : "")}" : "–";
         CaptureMethodStatus = DescribeCaptureMethod(_host.Sampler);
-        foreach (var n in new[] { nameof(DeviceTitle), nameof(DeviceDescription), nameof(LinkFpsText), nameof(OutputFpsText), nameof(CaptureText),
-                                  nameof(MonitorText), nameof(CaptureMethodStatus) })
+        foreach (var n in new[] { nameof(DeviceTitle), nameof(DeviceDescription), nameof(DeviceGlyph), nameof(LinkFpsText), nameof(OutputFpsText),
+                                  nameof(CaptureText), nameof(MonitorText), nameof(CaptureMethodStatus) })
             OnPropertyChanged(n);
     }
+
+    /// <summary>Icon of the configured device family (status card).</summary>
+    public string DeviceGlyph { get; private set; } = "";
 
     /// <summary>"In use: …" line under the capture method choice.</summary>
     public string CaptureMethodStatus { get; private set; } = "";
@@ -266,15 +301,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (closeAmbiBox != ShowCloseAmbiBoxInStatus) { ShowCloseAmbiBoxInStatus = closeAmbiBox; OnPropertyChanged(nameof(ShowCloseAmbiBoxInStatus)); }
     }
 
-    private static string DescribePause(PauseReason p)
-    {
-        var parts = new List<string>();
-        if (p.HasFlag(PauseReason.DisplayOff)) parts.Add("the display is off");
-        if (p.HasFlag(PauseReason.Locked)) parts.Add("the PC is locked");
-        if (p.HasFlag(PauseReason.Suspended)) parts.Add("the PC is asleep");
-        return string.Join(", ", parts);
-    }
-
     private void OnDeviceStatusChanged()
     {
         RefreshStatus();
@@ -289,6 +315,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         OnPropertyChanged(nameof(ChannelGammaText));
         OnPropertyChanged(nameof(ColorMatrixText));
+        if (ShowAutoDetectBar) OnAutoDetectNoticeChanged(); // the LED count offer depends on the layout
         if (_viewActive) RefreshStatus();
     }
 
@@ -413,6 +440,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public IReadOnlyList<Option<ColorOrder>> ColorOrders { get; } =
         [.. Enum.GetValues<ColorOrder>().Select(o => new Option<ColorOrder>(o, o.ToString()))];
+
+    public IReadOnlyList<Option<NetworkProtocol>> Protocols { get; } =
+    [
+        new(NetworkProtocol.Auto, "Automatic"),
+        new(NetworkProtocol.Warls, "WARLS (up to 255 LEDs)"),
+        new(NetworkProtocol.Drgb, "DRGB (up to 490 LEDs)"),
+        new(NetworkProtocol.Dnrgb, "DNRGB (any number)"),
+    ];
 
     public IReadOnlyList<Option<int>> FpsOptions { get; } =
     [
@@ -647,6 +682,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _host.OverrideChanged -= OnOverrideChanged;
         _host.AmbiBoxStateChanged -= OnAmbiBoxStateChanged;
         _host.SettingsChanged -= OnSettingsChanged;
+        _host.AutoDetectNoticeChanged -= OnAutoDetectNoticeChanged;
+        Setup.Dispose();
         S.Dispose();
     }
 }

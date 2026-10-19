@@ -344,6 +344,40 @@
         </Setter>
     </Style>
 
+    <!-- ============ progress ring (indeterminate) ============ -->
+    <Style TargetType="c:ProgressRing">
+        <Setter Property="Width" Value="20" />
+        <Setter Property="Height" Value="20" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="c:ProgressRing">
+                    <Ellipse x:Name="PART_Arc" Stroke="{TemplateBinding Foreground}" StrokeThickness="2.5"
+                             StrokeDashArray="7 15" StrokeDashCap="Round" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- inline validation message under an input -->
+    <Style x:Key="ErrorText" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Margin" Value="2,6,0,0" />
+        <Setter Property="AutomationProperties.LiveSetting" Value="Assertive" />
+    </Style>
+
+    <!-- small pill badge ("Coming soon", "In use") -->
+    <Style x:Key="Badge" TargetType="Border">
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Padding" Value="6,1,6,2" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="TextElement.FontSize" Value="11" />
+    </Style>
+
     <!-- thin divider inside cards -->
     <Style x:Key="Divider" TargetType="Border">
         <Setter Property="Height" Value="1" />

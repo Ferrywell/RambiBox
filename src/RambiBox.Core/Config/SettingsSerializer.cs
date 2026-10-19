@@ -67,6 +67,7 @@ public static class SettingsSerializer
         d.E131Universe = Math.Clamp(d.E131Universe, 1, 63999);
         d.WledTimeoutSeconds = Math.Clamp(d.WledTimeoutSeconds, 1, 255);
         d.Host = string.IsNullOrWhiteSpace(d.Host) ? null : d.Host.Trim(); // e.g. a number from a hand-edited file
+        d.Name = string.IsNullOrWhiteSpace(d.Name) ? null : d.Name.Trim() is { Length: > 80 } n ? n[..80] : d.Name.Trim();
 
         var c = s.Color;
         c.Brightness = Math.Clamp(c.Brightness, 0, 1);

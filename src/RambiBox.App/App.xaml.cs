@@ -4,6 +4,7 @@ using RambiBox.App.Services;
 using RambiBox.App.Views;
 using RambiBox.Core;
 using RambiBox.Core.Calibration;
+using RambiBox.Core.Devices;
 
 namespace RambiBox.App;
 
@@ -128,6 +129,7 @@ public partial class App : Application
 
         try { _tray = new TrayIconService(this, Host); }
         catch (Exception ex) { Log.Error("Tray icon failed", ex); }
+        Host.AutoDetectNoticeChanged += OnAutoDetectNotice;
 
         _showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName + suffix);
         _showWait = ThreadPool.RegisterWaitForSingleObject(_showEvent,
@@ -152,6 +154,29 @@ public partial class App : Application
             }
             Host.AmbiBoxStateChanged += Once;
             MemoryTrim.Schedule(TimeSpan.FromSeconds(15)); // after startup work (JIT, first captures) has settled
+        }
+    }
+
+    /// <summary>
+    /// Background device detection found something: the window shows an InfoBar; when the window isn't open, a tray
+    /// notification says so (clicking it opens the window, on the Device page when there is a choice to make).
+    /// </summary>
+    private void OnAutoDetectNotice()
+    {
+        if (Host.AutoDetectNotice is not { } n || _tray is null || _main is { IsVisible: true }) return;
+        switch (n.Action)
+        {
+            case AutoSwitchAction.Switch:
+                _tray.Notify($"Found {n.Device!.DisplayName}", "RambiBox is using it for your LEDs now.");
+                break;
+            case AutoSwitchAction.Suggest:
+                LastPage = "device";
+                _tray.Notify($"Found {n.Device!.DisplayName}", "Your LED controller isn't responding. Click to use this one instead.");
+                break;
+            case AutoSwitchAction.Choose:
+                LastPage = "device";
+                _tray.Notify($"Found {n.Count} LED controllers", "Click to choose the one RambiBox should use.");
+                break;
         }
     }
 

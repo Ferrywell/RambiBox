@@ -6,9 +6,10 @@ using RambiBox.Core.Devices;
 namespace RambiBox.App.Dev;
 
 /// <summary>
-/// Fake Adalight controller for running the UI without touching real serial ports (<c>--simulate</c>).
-/// Behaves like a CH340 on COM3: "finds" the device after a short search and paces frames like a real
-/// 115200 baud link would (≈33 fps for 112 LEDs).
+/// Fake LED controller for running the UI without touching real hardware (<c>--simulate</c>).
+/// For the serial types it behaves like a CH340 on COM3: "finds" the device after a short search and paces frames
+/// like a real serial link would (≈33 fps for 112 LEDs at 115200 baud). For the other types it pretends to reach the
+/// configured host / device and runs at 60 fps; a network type without an address keeps searching.
 /// </summary>
 public sealed class SimulatedLedDevice : ILedDevice
 {
@@ -20,6 +21,8 @@ public sealed class SimulatedLedDevice : ILedDevice
     private bool _started, _disposed;
     private DeviceStatus _status = DeviceStatus.Stopped;
     private string? _port;
+    private DeviceSettings _settings = new();
+    private int _generation;
 
     private readonly SerialPortInfo SimPort;
 
@@ -34,22 +37,42 @@ public sealed class SimulatedLedDevice : ILedDevice
 
     public void Configure(DeviceSettings settings, int ledCount)
     {
+        int generation;
         lock (_lock)
         {
             _leds = Math.Max(1, ledCount);
             _baud = Math.Max(1200, settings.BaudRate);
-            if (_started) return;
+            bool targetChanged = _settings.Type != settings.Type || !string.Equals(_settings.Host, settings.Host, StringComparison.OrdinalIgnoreCase)
+                                 || _settings.E131Multicast != settings.E131Multicast;
+            _settings = new DeviceSettings
+            {
+                Type = settings.Type, Host = settings.Host, E131Multicast = settings.E131Multicast, DeviceId = settings.DeviceId,
+            };
+            if (_started && !targetChanged) return;
             _started = true;
+            generation = ++_generation;
         }
-        Log.Info("Simulated LED device: searching");
+        var type = settings.Type;
+        Log.Info($"Simulated LED device ({type}): searching");
         SetStatus(DeviceStatus.Searching, null);
+        bool needsHost = DeviceCatalog.IsNetwork(type) && !(type == DeviceType.E131 && settings.E131Multicast);
+        if (needsHost && string.IsNullOrWhiteSpace(settings.Host)) return; // nothing to reach
         ThreadPool.QueueUserWorkItem(_ =>
         {
             Thread.Sleep(800);
-            if (_disposed) return;
-            SetStatus(DeviceStatus.Connected, SimPort.PortName);
-            Log.Info($"Simulated LED device connected on {SimPort.PortName} ({_leds} LEDs, {_baud} baud)");
-            DeviceFound?.Invoke(SimPort);
+            if (_disposed || generation != Volatile.Read(ref _generation)) return;
+            string port = DeviceCatalog.IsSerial(type) ? SimPort.PortName
+                : type switch
+                {
+                    DeviceType.Lightpack => "Lightpack",
+                    DeviceType.AlienFx => "AlienFX",
+                    DeviceType.Virtual => "Virtual",
+                    DeviceType.E131 when settings.E131Multicast => "multicast",
+                    _ => settings.Host!,
+                };
+            SetStatus(DeviceStatus.Connected, port);
+            Log.Info($"Simulated LED device connected: {type} on {port} ({_leds} LEDs)");
+            if (DeviceCatalog.IsSerial(type)) DeviceFound?.Invoke(SimPort);
         });
     }
 
@@ -60,7 +83,7 @@ public sealed class SimulatedLedDevice : ILedDevice
         try { StatusChanged?.Invoke(); } catch (Exception ex) { Log.Error("StatusChanged handler failed", ex); }
     }
 
-    public double MaxFrameRate => _baud / 10.0 / (6 + 3.0 * _leds);
+    public double MaxFrameRate => DeviceCatalog.IsSerial(_settings.Type) ? _baud / 10.0 / (6 + 3.0 * _leds) : 60;
     public double FramesPerSecond => _fps;
 
     public void Submit(ReadOnlySpan<byte> rgb)

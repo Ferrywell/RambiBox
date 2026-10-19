@@ -5,7 +5,7 @@
              IsTabStop="False">
     <StackPanel>
         <TextBlock Text="Device" Style="{StaticResource PageTitle}" />
-        <TextBlock Text="Your Adalight-compatible LED controller. RambiBox finds it automatically – also when you plug it into another USB port."
+        <TextBlock Text="The LED controller that drives your strip – over USB, USB HID or your network. Find devices sets it up for you."
                    Style="{StaticResource PageSubtitle}" />
 
         <!-- status -->
@@ -17,7 +17,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Width="48" Height="48" CornerRadius="24" VerticalAlignment="Top" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
-                        <TextBlock Text="&#xE88E;" Style="{StaticResource IconText}" FontSize="22" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding DeviceGlyph}" Style="{StaticResource IconText}" FontSize="22" HorizontalAlignment="Center" />
                     </Border>
                     <StackPanel Grid.Column="1" Margin="18,0,0,0" VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal">
@@ -25,12 +25,12 @@
                             <TextBlock Text="{Binding DeviceTitle}" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
                         </StackPanel>
                         <TextBlock Text="{Binding DeviceDescription}" Style="{StaticResource SettingDescription}" FontSize="14" />
-                        <TextBlock Text="{Binding StatusText}" Style="{StaticResource SettingDescription}" />
+                        <TextBlock Text="{Binding StatusText}" Style="{StaticResource SettingDescription}" AutomationProperties.LiveSetting="Polite" />
                     </StackPanel>
                 </Grid>
                 <Border Style="{StaticResource Divider}" Margin="-20,14" />
                 <UniformGrid Columns="4">
-                    <StackPanel Margin="0,0,12,0" ToolTip="The most updates per second the serial link can carry for your number of LEDs and baud rate.">
+                    <StackPanel Margin="0,0,12,0" ToolTip="The most updates per second the link to the controller can carry for your number of LEDs.">
                         <TextBlock Text="Link limit" Style="{StaticResource SettingDescription}" />
                         <TextBlock Text="{Binding LinkFpsText}" FontSize="16" Foreground="{DynamicResource TextFillColorPrimaryBrush}" TextWrapping="Wrap" />
                     </StackPanel>
@@ -56,24 +56,234 @@
                       IsEnabled="{Binding CalibrationActive, Converter={StaticResource InverseBool}}" />
         </c:SettingCard>
 
+        <!-- ============ controller ============ -->
+        <TextBlock Text="Controller" Style="{StaticResource SectionHeader}" />
+
+        <c:SettingCard Header="Find devices" Glyph="&#xE721;"
+                       Description="Looks for LED controllers on the USB ports and on your network. Takes about 5 seconds.">
+            <Grid>
+                <Button Style="{DynamicResource AccentButtonStyle}" Command="{Binding Setup.FindDevicesCommand}" MinWidth="132"
+                        AutomationProperties.Name="Find devices"
+                        Visibility="{Binding Setup.IsSearching, Converter={StaticResource InverseBoolToVisibility}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock Text="Find devices" />
+                    </StackPanel>
+                </Button>
+                <StackPanel Orientation="Horizontal" Visibility="{Binding Setup.IsSearching, Converter={StaticResource BoolToVisibility}}">
+                    <c:ProgressRing Margin="0,0,10,0" />
+                    <TextBlock Text="Searching…" VerticalAlignment="Center" Margin="0,0,14,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               AutomationProperties.LiveSetting="Polite" />
+                    <Button Content="Cancel" Command="{Binding Setup.CancelFindCommand}" AutomationProperties.Name="Cancel the search" />
+                </StackPanel>
+            </Grid>
+        </c:SettingCard>
+
+        <!-- results -->
+        <StackPanel Margin="28,2,0,0" Visibility="{Binding Setup.HasResults, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock Text="{Binding Setup.ResultsHeader}" Style="{StaticResource SettingDescription}" Margin="2,2,0,6" />
+            <ItemsControl ItemsSource="{Binding Setup.FoundDevices}" Focusable="False" AutomationProperties.Name="Controllers found">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource Card}" Padding="14,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Width="36" Height="36" CornerRadius="18" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                    <TextBlock Text="{Binding Glyph}" Style="{StaticResource IconText}" HorizontalAlignment="Center" />
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="14,0,12,0" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Name}" Style="{StaticResource SettingTitle}" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Detail}" Style="{StaticResource SettingDescription}" />
+                                </StackPanel>
+                                <Button Grid.Column="2" Content="Use this" Style="{DynamicResource AccentButtonStyle}" VerticalAlignment="Center"
+                                        Command="{Binding DataContext.Setup.UseDeviceCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                        CommandParameter="{Binding}" AutomationProperties.Name="{Binding Name, StringFormat='Use {0}'}"
+                                        Visibility="{Binding CanUse, Converter={StaticResource BoolToVisibility}}" />
+                                <Border Grid.Column="2" Style="{StaticResource Badge}"
+                                        Visibility="{Binding StateText, Converter={StaticResource NullToCollapsed}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE73E;" FontFamily="{StaticResource IconFont}" Margin="0,1,6,0" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource SystemFillColorSuccessBrush}"
+                                                   Visibility="{Binding IsCurrent, Converter={StaticResource BoolToVisibility}}" />
+                                        <TextBlock Text="{Binding StateText}" />
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+
+        <c:InfoBar Severity="Informational" Title="No LED controllers found." Margin="0,4,0,4"
+                   Message="Check that the controller is plugged in – or powered on and on the same network as this PC – and try again. You can also set it up by hand below."
+                   Visibility="{Binding Setup.ShowNothingFound, Converter={StaticResource BoolToVisibility}}" />
+
+        <c:InfoBar Severity="Success" Title="{Binding Setup.UsedTitle}" Message="{Binding Setup.UsedMessage}" IsClosable="True" Margin="0,4,0,4"
+                   CloseCommand="{Binding Setup.DismissUsedCommand}"
+                   Visibility="{Binding Setup.ShowUsed, Converter={StaticResource BoolToVisibility}}">
+            <c:InfoBar.Style>
+                <!-- the action button only while there is an LED count to adopt (Content null hides the action row) -->
+                <Style TargetType="c:InfoBar" BasedOn="{StaticResource {x:Type c:InfoBar}}">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Setup.ShowLayoutOffer}" Value="True">
+                            <Setter Property="Content">
+                                <Setter.Value>
+                                    <Button Content="{Binding Setup.ResizeLayoutLabel}" Command="{Binding Setup.ResizeLayoutCommand}"
+                                            HorizontalAlignment="Left" Style="{DynamicResource AccentButtonStyle}" />
+                                </Setter.Value>
+                            </Setter>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </c:InfoBar.Style>
+        </c:InfoBar>
+
+        <c:SettingCard Header="Controller type" Glyph="{Binding S.DeviceTypeGlyph}" Description="{Binding S.DeviceTypeDescription}" Margin="0,4,0,4">
+            <ComboBox Width="340" ItemsSource="{Binding Setup.DeviceTypes}" SelectedValuePath="Type" SelectedValue="{Binding S.DeviceType}"
+                      MaxDropDownHeight="560" AutomationProperties.Name="Controller type">
+                <ComboBox.GroupStyle>
+                    <GroupStyle>
+                        <GroupStyle.HeaderTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" Margin="12,10,0,4"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            </DataTemplate>
+                        </GroupStyle.HeaderTemplate>
+                    </GroupStyle>
+                </ComboBox.GroupStyle>
+                <ComboBox.ItemContainerStyle>
+                    <Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
+                        <Setter Property="IsEnabled" Value="{Binding IsSupported}" />
+                        <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
+                        <Setter Property="AutomationProperties.HelpText" Value="{Binding Description}" />
+                    </Style>
+                </ComboBox.ItemContainerStyle>
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="Icon" Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="16"
+                                       VerticalAlignment="Center" Margin="0,0,12,0" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                    <Border Style="{StaticResource Badge}" Margin="8,0,0,0"
+                                            Visibility="{Binding Badge, Converter={StaticResource NullToCollapsed}}">
+                                        <TextBlock Text="{Binding Badge}" />
+                                    </Border>
+                                </StackPanel>
+                                <TextBlock x:Name="Desc" Text="{Binding Description}" Style="{StaticResource SettingDescription}"
+                                           Width="270" HorizontalAlignment="Left" Margin="0,1,0,2" />
+                            </StackPanel>
+                        </Grid>
+                        <DataTemplate.Triggers>
+                            <!-- the closed box shows just icon + name (the description is on the card) -->
+                            <DataTrigger Binding="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType=ComboBoxItem}}" Value="{x:Null}">
+                                <Setter TargetName="Desc" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="Icon" Property="VerticalAlignment" Value="Center" />
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+        </c:SettingCard>
+
+        <!-- ============ settings of the chosen type ============ -->
         <TextBlock Text="Connection" Style="{StaticResource SectionHeader}" />
-        <c:SettingCard Header="Port" Glyph="&#xE88E;"
-                       Description="Automatic finds the controller on any USB port. Choose a port only if detection fails.">
-            <ComboBox MinWidth="260" MaxWidth="360" ItemsSource="{Binding PortOptions}" DisplayMemberPath="Display"
-                      SelectedValuePath="Value" SelectedValue="{Binding S.Port}" AutomationProperties.Name="Port" />
+
+        <c:InfoBar Severity="Warning" Title="Coming soon." Message="{Binding Setup.UnsupportedMessage}"
+                   Visibility="{Binding Setup.ShowUnsupported, Converter={StaticResource BoolToVisibility}}" />
+
+        <!-- USB serial: Adalight, Ardulight, AWA, TPM2 -->
+        <StackPanel Visibility="{Binding S.IsSerialType, Converter={StaticResource BoolToVisibility}}">
+            <c:SettingCard Header="Port" Glyph="&#xE88E;"
+                           Description="Automatic finds the controller on any USB port, also after re-plugging. Choose a port only if detection fails.">
+                <ComboBox MinWidth="260" MaxWidth="360" ItemsSource="{Binding PortOptions}" DisplayMemberPath="Display"
+                          SelectedValuePath="Value" SelectedValue="{Binding S.Port}" AutomationProperties.Name="Port" />
+            </c:SettingCard>
+            <c:SettingCard Header="Baud rate" Glyph="&#xE9D9;" Description="{Binding S.BaudRateDescription}">
+                <ComboBox Width="160" IsEditable="True" ItemsSource="{Binding S.BaudPresets}"
+                          Text="{Binding S.BaudRateText, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Baud rate" />
+            </c:SettingCard>
+        </StackPanel>
+
+        <!-- USB HID: Lightpack -->
+        <c:SettingCard Header="Lightpack" Glyph="&#xE88E;"
+                       Description="Which Lightpack to use when more than one is connected. Automatic uses the first one found."
+                       Visibility="{Binding S.IsLightpackType, Converter={StaticResource BoolToVisibility}}">
+            <ComboBox MinWidth="260" MaxWidth="360" ItemsSource="{Binding Setup.DeviceIdOptions}" DisplayMemberPath="Display"
+                      SelectedValuePath="Value" SelectedValue="{Binding S.SelectedDeviceId}" AutomationProperties.Name="Lightpack device" />
         </c:SettingCard>
-        <c:SettingCard Header="Baud rate" Glyph="&#xE9D9;"
-                       Description="Speed of the serial link. Must match your controller's firmware (115200 for most Adalight sketches).">
-            <ComboBox Width="160" IsEditable="True" ItemsSource="{Binding BaudRates}"
-                      Text="{Binding S.BaudRateText, UpdateSourceTrigger=LostFocus}" AutomationProperties.Name="Baud rate" />
-        </c:SettingCard>
+
+        <!-- network: WLED, DDP, E1.31 -->
+        <StackPanel Visibility="{Binding S.IsNetworkType, Converter={StaticResource BoolToVisibility}}">
+            <c:SettingCard Header="Multicast" Glyph="&#xE968;"
+                           Description="Send to the sACN multicast group so every E1.31 receiver on the network can listen. Off = send to one address."
+                           Visibility="{Binding S.IsE131Type, Converter={StaticResource BoolToVisibility}}">
+                <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding S.E131Multicast}" AutomationProperties.Name="Multicast" />
+            </c:SettingCard>
+            <c:SettingCard Header="Address" Glyph="&#xE774;" Description="{Binding S.HostDescription}" IsEnabled="{Binding S.HostEnabled}">
+                <StackPanel Width="260">
+                    <TextBox Text="{Binding S.HostText, UpdateSourceTrigger=LostFocus}" KeyDown="OnCommitOnEnter"
+                             AutomationProperties.Name="IP address or host name" />
+                    <TextBlock Text="{Binding S.HostError}" Style="{StaticResource ErrorText}"
+                               Visibility="{Binding S.HostError, Converter={StaticResource NullToCollapsed}}" />
+                </StackPanel>
+            </c:SettingCard>
+            <c:SettingCard Header="Protocol" Glyph="&#xE8AB;" Description="{Binding S.ProtocolDescription}"
+                           Visibility="{Binding S.IsWledType, Converter={StaticResource BoolToVisibility}}">
+                <ComboBox Width="220" ItemsSource="{Binding Protocols}" DisplayMemberPath="Display" SelectedValuePath="Value"
+                          SelectedValue="{Binding S.Protocol}" AutomationProperties.Name="WLED protocol" />
+            </c:SettingCard>
+            <c:SettingCard Header="Timeout" Glyph="&#xE916;"
+                           Description="Seconds WLED keeps RambiBox's colors after the last update before it returns to its own effect (255 = until it restarts)."
+                           Visibility="{Binding S.IsWledType, Converter={StaticResource BoolToVisibility}}">
+                <c:NumberBox Width="140" Value="{Binding S.WledTimeoutSeconds}" Minimum="1" Maximum="255" Label="Timeout in seconds" />
+            </c:SettingCard>
+            <c:SettingCard Header="Start universe" Glyph="&#xE8FD;" Description="{Binding S.E131UniverseDescription}"
+                           Visibility="{Binding S.IsE131Type, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel Width="140">
+                    <TextBox Text="{Binding S.E131UniverseText, UpdateSourceTrigger=LostFocus}" KeyDown="OnCommitOnEnter"
+                             AutomationProperties.Name="Start universe" />
+                    <TextBlock Text="{Binding S.E131UniverseError}" Style="{StaticResource ErrorText}"
+                               Visibility="{Binding S.E131UniverseError, Converter={StaticResource NullToCollapsed}}" />
+                </StackPanel>
+            </c:SettingCard>
+            <c:SettingCard Header="UDP port" Glyph="&#xE969;" Description="{Binding S.UdpPortDescription}">
+                <StackPanel Width="140">
+                    <TextBox Text="{Binding S.NetworkPortText, UpdateSourceTrigger=LostFocus}" KeyDown="OnCommitOnEnter"
+                             AutomationProperties.Name="UDP port" />
+                    <TextBlock Text="{Binding S.NetworkPortError}" Style="{StaticResource ErrorText}"
+                               Visibility="{Binding S.NetworkPortError, Converter={StaticResource NullToCollapsed}}" />
+                </StackPanel>
+            </c:SettingCard>
+        </StackPanel>
+
         <c:SettingCard Header="Color order" Glyph="&#xE8B1;"
-                       Description="Change this if red, green or blue appear swapped on the strip (check with Test colors).">
+                       Description="Change this if red, green or blue appear swapped on the strip (check with Test colors)."
+                       Visibility="{Binding S.ShowColorOrder, Converter={StaticResource BoolToVisibility}}">
             <ComboBox Width="160" ItemsSource="{Binding ColorOrders}" DisplayMemberPath="Display" SelectedValuePath="Value"
                       SelectedValue="{Binding S.ColorOrder}" AutomationProperties.Name="Color order" />
         </c:SettingCard>
+
+        <c:SettingCard Header="Alienware lighting" Glyph="&#xE946;"
+                       Description="RambiBox drives the lighting zones of your Alienware PC and peripherals through the AlienFX (LightFX) SDK that comes with Alienware Command Center. There is nothing else to set up."
+                       Visibility="{Binding S.IsAlienFxType, Converter={StaticResource BoolToVisibility}}" />
+
+        <c:SettingCard Header="No hardware" Glyph="&#xE946;"
+                       Description="The colors are only shown in the live preview on the Home page – handy to try out layouts and effects without a controller."
+                       Visibility="{Binding S.IsVirtualType, Converter={StaticResource BoolToVisibility}}" />
+
         <c:SettingCard Header="Maximum update rate" Glyph="&#xEC4A;"
-                       Description="Automatic sends updates as fast as the USB link allows, for the lowest delay.">
+                       Description="Automatic sends updates as fast as the link to the controller allows, for the lowest delay.">
             <ComboBox MinWidth="200" MaxWidth="360" ItemsSource="{Binding FpsOptions}" DisplayMemberPath="Display"
                       SelectedValuePath="Value" SelectedValue="{Binding S.MaxFps}" AutomationProperties.Name="Maximum update rate" />
         </c:SettingCard>
