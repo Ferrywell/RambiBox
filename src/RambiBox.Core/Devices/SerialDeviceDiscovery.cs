@@ -154,7 +154,8 @@ public sealed class SerialDeviceDiscovery : IDeviceDiscovery
                 : $"{chip} · unknown USB device; not probed (opening it could reset it)",
         };
         string name = r == PortResult.Adalight ? $"Adalight on {p.PortName}" : $"Serial controller on {p.PortName}";
-        return new DiscoveredDevice(DeviceType.Adalight, p.PortName, name, detail, Port: p.PortName);
+        return new DiscoveredDevice(DeviceType.Adalight, p.PortName, name, detail, Port: p.PortName,
+            Verified: r == PortResult.Adalight);
     }
 
     /// <summary>Modem-class ports, or null when they cannot be determined.</summary>

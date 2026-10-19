@@ -79,3 +79,20 @@ public class DeviceArchitectureTests
         Assert.Equal("10.0.0.5", back.Device.Host);
     }
 }
+
+public class DiscoveredDeviceApplyTests
+{
+    [Fact]
+    public void Unverified_serial_candidate_keeps_the_users_serial_protocol()
+    {
+        var s = new DeviceSettings { Type = DeviceType.Awa, Port = "Auto" };
+        new DiscoveredDevice(DeviceType.Adalight, "COM5", "Serial controller on COM5", "", Port: "COM5", Verified: false).ApplyTo(s);
+        Assert.Equal(DeviceType.Awa, s.Type);
+        Assert.Equal("COM5", s.Port);
+        new DiscoveredDevice(DeviceType.Adalight, "COM5", "Adalight on COM5", "", Port: "COM5").ApplyTo(s);
+        Assert.Equal(DeviceType.Adalight, s.Type);
+        var n = new DeviceSettings { Type = DeviceType.Adalight };
+        new DiscoveredDevice(DeviceType.Wled, "aa:bb", "WLED", "", LedCount: 60, Host: "10.0.0.9").ApplyTo(n);
+        Assert.Equal((DeviceType.Wled, "10.0.0.9"), (n.Type, n.Host));
+    }
+}
