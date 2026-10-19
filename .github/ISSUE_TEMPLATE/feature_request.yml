@@ -1,0 +1,34 @@
+name: Feature request
+description: Suggest an idea or an improvement.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        RambiBox aims to stay small, fast and simple. Ideas that make it nicer for everyone are very welcome!
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the situation and why the current behavior falls short.
+      placeholder: "When I watch films with subtitles, the bottom LEDs flicker white…"
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you like to work on this?
+      options:
+        - "No"
+        - "Yes, I'd like to open a pull request"
+        - "Maybe, with some guidance"

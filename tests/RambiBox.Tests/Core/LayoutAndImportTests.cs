@@ -4,7 +4,7 @@ namespace RambiBox.Tests.Core;
 
 public class LayoutAndImportTests
 {
-    // Zones exactly as stored by the user's AmbiBox (0..10000), see reference/zones.csv
+    // Zones exactly as stored by the user's AmbiBox (0..10000), captured from a real AmbiBox profile
     private static readonly (int led, int l, int t, int r, int b)[] AmbiBoxSamples =
     [
         (0, 0, 9473, 270, 10000), (18, 4864, 9473, 5135, 10000), (36, 9729, 9473, 10000, 10000),

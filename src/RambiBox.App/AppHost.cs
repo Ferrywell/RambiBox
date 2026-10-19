@@ -27,11 +27,13 @@ public sealed record CalibrationSnapshot((double R, double G, double B) WhiteBal
 }
 
 /// <summary>Command line options.</summary>
-public sealed record AppOptions(bool Tray, bool Simulate, string? Theme, string? Page, bool Exit = false)
+/// <param name="Demo"><c>--demo</c>: simulated LED device plus a synthetic movie scene instead of the real desktop,
+/// with fresh default settings in a temporary folder (screenshots, demos). Implies <paramref name="Simulate"/>.</param>
+public sealed record AppOptions(bool Tray, bool Simulate, string? Theme, string? Page, bool Exit = false, bool Demo = false)
 {
     public static AppOptions Parse(string[] args)
     {
-        bool tray = false, sim = false, exit = false;
+        bool tray = false, sim = false, exit = false, demo = false;
         string? theme = null, page = null;
         foreach (var a in args)
         {
@@ -39,10 +41,11 @@ public sealed record AppOptions(bool Tray, bool Simulate, string? Theme, string?
             if (arg is "--tray" or "/tray") tray = true;
             else if (arg is "--simulate" or "/simulate") sim = true;
             else if (arg is "--exit" or "/exit") exit = true;
+            else if (arg is "--demo" or "/demo") demo = sim = true;
             else if (arg.StartsWith("--theme=")) theme = arg["--theme=".Length..];
             else if (arg.StartsWith("--page=")) page = arg["--page=".Length..];
         }
-        return new AppOptions(tray, sim, theme, page, exit);
+        return new AppOptions(tray, sim, theme, page, exit, demo);
     }
 }
 
@@ -97,15 +100,23 @@ public sealed class AppHost : IDisposable
         _dispatcher = dispatcher;
         _saveTimer = new Timer(_ => SaveNow(), null, Timeout.Infinite, Timeout.Infinite);
 
-        // A simulated run keeps its own settings file so it never disturbs the real configuration.
+        // A simulated run keeps its own settings file so it never disturbs the real configuration;
+        // a demo run always starts from fresh defaults in a temporary folder.
         var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "RambiBox");
-        Store = new SettingsStore(options.Simulate ? Path.Combine(dir, "settings.simulate.json") : null);
+        Store = new SettingsStore(options.Demo ? Path.Combine(DemoDirectory, "settings.json")
+            : options.Simulate ? Path.Combine(dir, "settings.simulate.json") : null);
+        if (options.Demo)
+        {
+            try { File.Delete(Store.FilePath); File.Delete(Store.FilePath + ".bak"); }
+            catch (Exception ex) { Log.Warn($"Could not reset the demo settings: {ex.Message}"); }
+        }
 
         AppSettings? loaded = Store.Exists ? Store.Load() : null;
         FirstRun = loaded is null || !loaded.General.FirstRunDone;
         if (FirstRun)
         {
-            var imported = AmbiBoxImporter.TryImport(out var summary);
+            string summary = "";
+            var imported = options.Demo ? null : AmbiBoxImporter.TryImport(out summary);
             if (imported is not null)
             {
                 Settings = imported;
@@ -114,8 +125,9 @@ public sealed class AppHost : IDisposable
             else
             {
                 Settings = loaded ?? new AppSettings();
-                Log.Info("No AmbiBox settings found; using defaults");
+                Log.Info(options.Demo ? "Demo: using default settings" : "No AmbiBox settings found; using defaults");
             }
+            if (options.Demo) Settings.Static.Color = 0xFF9F45; // warm amber looks nicer than the default green
             Settings.General.FirstRunDone = true;
         }
         else
@@ -127,8 +139,8 @@ public sealed class AppHost : IDisposable
         SettingsSerializer.Normalize(Settings);
         if (FirstRun) TrySave(Settings.Clone());
 
-        Sampler = new DxgiScreenSampler();
-        Device = options.Simulate ? new SimulatedLedDevice() : new AdalightDevice();
+        Sampler = options.Demo ? new DemoScreenSampler() : new DxgiScreenSampler();
+        Device = options.Simulate ? new SimulatedLedDevice(demo: options.Demo) : new AdalightDevice();
         Device.DeviceFound += OnDeviceFound;
         Device.StatusChanged += OnDeviceStatusChanged;
         Engine = new LightEngine(Sampler, Device);
@@ -136,6 +148,9 @@ public sealed class AppHost : IDisposable
         _lastStartWithWindows = Settings.General.StartWithWindows;
         SnapshotWhiteBalance();
     }
+
+    /// <summary>Settings and log folder of a <c>--demo</c> run (temporary, recreated each start).</summary>
+    public static string DemoDirectory => Path.Combine(Path.GetTempPath(), "RambiBox.Demo");
 
     public void Start()
     {
@@ -446,6 +461,7 @@ public sealed class AppHost : IDisposable
 
     public async Task RefreshAmbiBoxAsync()
     {
+        if (Options.Demo) return; // the demo shows a clean, AmbiBox-free setup
         try
         {
             var (running, autostart) = await Task.Run(() => (AmbiBoxImporter.IsRunning(), AmbiBoxImporter.IsInAutostart()));

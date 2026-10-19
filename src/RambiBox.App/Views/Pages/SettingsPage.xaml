@@ -2,6 +2,7 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:c="clr-namespace:RambiBox.App.Controls"
+             xmlns:app="clr-namespace:RambiBox.App"
              IsTabStop="False">
     <StackPanel>
         <TextBlock Text="Settings" Style="{StaticResource PageTitle}" Margin="0,0,0,16" />
@@ -68,6 +69,34 @@
                     </StackPanel>
                 </StackPanel>
                 <TextBlock Style="{StaticResource SettingDescription}" Margin="0,12,0,0" Text="Ambient lighting for Adalight LED strips – the successor of AmbiBox for Windows 11." />
+                <TextBlock Style="{StaticResource SettingDescription}" Margin="0,4,0,0" TextWrapping="Wrap">
+                    <Run Text="{Binding LicenseText, Mode=OneWay}" />
+                    <Hyperlink Command="{Binding OpenUrlCommand}" CommandParameter="{x:Static app:AppInfo.LicenseUrl}"
+                               ToolTip="{x:Static app:AppInfo.LicenseUrl}">License</Hyperlink>
+                </TextBlock>
+                <WrapPanel Margin="0,12,0,0">
+                    <Button Command="{Binding OpenUrlCommand}" CommandParameter="{x:Static app:AppInfo.RepoUrl}" Margin="0,0,8,4"
+                            ToolTip="{x:Static app:AppInfo.RepoUrl}" AutomationProperties.Name="Open the GitHub repository">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE943;" FontFamily="{StaticResource IconFont}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <TextBlock Text="GitHub" />
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding OpenUrlCommand}" CommandParameter="{x:Static app:AppInfo.SiteUrl}" Margin="0,0,8,4"
+                            ToolTip="{x:Static app:AppInfo.SiteUrl}" AutomationProperties.Name="Open the website">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE774;" FontFamily="{StaticResource IconFont}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <TextBlock Text="Website" />
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding OpenUrlCommand}" CommandParameter="{x:Static app:AppInfo.IssuesUrl}" Margin="0,0,8,4"
+                            ToolTip="{x:Static app:AppInfo.IssuesUrl}" AutomationProperties.Name="Report an issue">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xEBE8;" FontFamily="{StaticResource IconFont}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <TextBlock Text="Report an issue" />
+                        </StackPanel>
+                    </Button>
+                </WrapPanel>
                 <Border Style="{StaticResource Divider}" Margin="-16,12" />
                 <TextBlock Style="{StaticResource SettingDescription}">
                     <Run Text="Settings:" /> <Run Text="{Binding SettingsPath, Mode=OneWay}" />
