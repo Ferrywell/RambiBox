@@ -18,7 +18,14 @@ public enum DeviceStatus
 /// <param name="PortName">"COM3"</param>
 /// <param name="Description">"USB-SERIAL CH340"</param>
 /// <param name="UsbId">"1A86:7523" or null when not USB.</param>
-public sealed record SerialPortInfo(string PortName, string Description, string? UsbId);
+public sealed record SerialPortInfo(string PortName, string Description, string? UsbId)
+{
+    /// <summary>
+    /// True for Bluetooth virtual COM ports (BTHENUM). Opening those can block for seconds while Windows
+    /// tries to reach the paired device, so auto-detect never probes them.
+    /// </summary>
+    public bool IsBluetooth { get; init; }
+}
 
 /// <summary>
 /// An Adalight-compatible LED controller. Owns its own background thread that (re)connects automatically,
