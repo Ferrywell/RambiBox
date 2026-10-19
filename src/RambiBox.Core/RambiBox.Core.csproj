@@ -5,11 +5,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Calibration\PhonePage.html" LogicalName="RambiBox.Calibration.PhonePage.html" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="RambiBox.Tests" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="System.IO.Ports" Version="10.0.13" />
+    <PackageReference Include="Vortice.Direct2D1" Version="3.8.3" />
     <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
     <PackageReference Include="Vortice.DXGI" Version="3.8.3" />
   </ItemGroup>
