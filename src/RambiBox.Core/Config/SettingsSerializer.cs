@@ -56,6 +56,8 @@ public static class SettingsSerializer
         s.Capture ??= new();
         s.Static ??= new();
         s.General ??= new();
+        s.Api ??= new();
+        ApiSettings.Normalize(s.Api);
         if (string.IsNullOrWhiteSpace(s.Device.Port)) s.Device.Port = DeviceSettings.AutoPort;
         if (s.Device.BaudRate <= 0) s.Device.BaudRate = 115200;
         s.Capture.MonitorId ??= "";

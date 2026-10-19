@@ -34,6 +34,14 @@ public static class DeviceStatusFormatter
         switch (st.DeviceStatus)
         {
             case DeviceStatus.Connected:
+                if (host.ApiControlling) // a Prismatik API client sets the colors (priority: calibration → test pattern → API)
+                {
+                    var api = host.ApiControl;
+                    return new("Controlled by an integration", api.Locked
+                            ? $"A Prismatik API client ({api.Owner}) sets the colors on {target}."
+                            : $"Showing the last colors of a Prismatik API client ({api.Owner}) on {target} until you switch the lights or the mode.",
+                        StatusLevel.Good, false);
+                }
                 if (st.OverrideActive)
                     return new($"Showing a test pattern on {target}", "", StatusLevel.Busy, false);
                 if (!s.Enabled)
