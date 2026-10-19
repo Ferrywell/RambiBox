@@ -128,6 +128,7 @@ public partial class App : Application
                     _tray?.Notify("AmbiBox is still running", "AmbiBox is using your LED controller. Click to switch to RambiBox.");
             }
             Host.AmbiBoxStateChanged += Once;
+            MemoryTrim.Schedule(TimeSpan.FromSeconds(15)); // after startup work (JIT, first captures) has settled
         }
     }
 
@@ -144,8 +145,10 @@ public partial class App : Application
                     _main = null;
                     // nothing UI related keeps running once the window is gone
                     Host.SetOverride(UiOverride.None);
+                    MemoryTrim.Schedule(TimeSpan.FromSeconds(3));
                 };
             }
+            MemoryTrim.Cancel();
             _main.Show();
             if (_main.WindowState == WindowState.Minimized) _main.WindowState = WindowState.Normal;
             _main.Activate();

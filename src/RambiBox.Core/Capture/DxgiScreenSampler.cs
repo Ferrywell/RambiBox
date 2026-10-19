@@ -45,6 +45,12 @@ public sealed class DxgiScreenSampler : IScreenSampler
     private ID3D11Device? _device;
     private ID3D11DeviceContext? _context;
     private IntPtr _contextPtr;
+    // GPU completion fence: waiting on a kernel event instead of a blocking Map(). NVIDIA drivers busy-wait inside
+    // a blocking Map, which cost ~6% of a core at 34 captures/s; the fence wait costs almost nothing.
+    private ID3D11DeviceContext4? _context4;
+    private ID3D11Fence? _fence;
+    private ulong _fenceValue;
+    private readonly AutoResetEvent _gpuDone = new(false);
     private Vortice.Luid _adapterLuid;
     private string _adapterName = "";
     private IDXGIOutputDuplication? _dupl;
@@ -193,6 +199,7 @@ public sealed class DxgiScreenSampler : IScreenSampler
             if (_disposed) return;
             _disposed = true;
             TeardownAll();
+            _gpuDone.Dispose();
             _currentMonitor = null;
         }
     }
@@ -290,6 +297,21 @@ public sealed class DxgiScreenSampler : IScreenSampler
             NativeCom.CopySubresourceRegion(_contextPtr, _stagingPtr, 0, _mipTexPtr, (uint)_mipLevel);
         }
         long mapStart = Stopwatch.GetTimestamp();
+        if (_fence is not null && _context4 is not null)
+        {
+            _fenceValue++;
+            _context4.Signal(_fence, _fenceValue);
+            try
+            {
+                _fence.SetEventOnCompletion(_fenceValue, _gpuDone.SafeWaitHandle.DangerousGetHandle());
+                ctx.Flush();
+                _gpuDone.WaitOne(250); // the Map below then returns without blocking
+            }
+            catch (SharpGenException)
+            {
+                // Device lost etc.: fall through to Map, whose HRESULT drives the normal recovery path.
+            }
+        }
         var mr = ctx.Map(_staging!, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.None, out var mapped);
         LastMapWaitMs = Stopwatch.GetElapsedTime(mapStart).TotalMilliseconds;
         if (mr.Failure)
@@ -574,6 +596,18 @@ public sealed class DxgiScreenSampler : IScreenSampler
         _device = dev;
         _context = ctx;
         _contextPtr = ctx.NativePointer;
+        try
+        {
+            using var dev5 = dev.QueryInterfaceOrNull<ID3D11Device5>();
+            _context4 = ctx.QueryInterfaceOrNull<ID3D11DeviceContext4>();
+            if (dev5 is not null && _context4 is not null) _fence = dev5.CreateFence(0, FenceFlags.None);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Capture: GPU fence unavailable, using blocking readback ({ex.Message})");
+            _fence = null;
+        }
+        if (_fence is null) { _context4?.Dispose(); _context4 = null; }
     }
 
     private int Duplicate(IDXGIOutput output, out IDXGIOutputDuplication? dupl)
@@ -722,6 +756,11 @@ public sealed class DxgiScreenSampler : IScreenSampler
         TeardownDuplication();
         ReleaseResources();
         _contextPtr = IntPtr.Zero;
+        try { _fence?.Dispose(); } catch { }
+        try { _context4?.Dispose(); } catch { }
+        _fence = null;
+        _context4 = null;
+        _fenceValue = 0;
         try { _context?.ClearState(); } catch { }
         try { _context?.Dispose(); } catch { }
         try { _device?.Dispose(); } catch { }
