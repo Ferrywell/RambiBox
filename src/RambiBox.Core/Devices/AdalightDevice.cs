@@ -63,6 +63,13 @@ public sealed class AdalightDevice : ILedDevice
     private HighResolutionTimer? _slotTimer; // cached instance for WaitForSlot callers
     private readonly Dictionary<string, ProbeState> _probe = new(StringComparer.OrdinalIgnoreCase);
 
+    // ---- auto-detect policy for "unknown" ports (device thread only), see AutoDetect
+    private HashSet<string>? _seenPorts;          // present ports at the last successful read; null before the first
+    private bool _startupScanDone;                // the first auto-detect scan of this instance has run
+    private readonly HashSet<string> _oneShotPending = new(StringComparer.OrdinalIgnoreCase); // may be probed once
+    private readonly HashSet<string> _oneShotSettled = new(StringComparer.OrdinalIgnoreCase); // decided for this presence
+    private bool _presentReadFailed;
+
     // ---- link + statistics
     private volatile ISerialLink? _activeLink;
     private long _writeStartedAt; // != 0 while a write is in progress (watchdog)
@@ -320,6 +327,23 @@ public sealed class AdalightDevice : ILedDevice
 
     // ---------------- auto-detect ----------------
 
+    /// <summary>
+    /// Searches all present ports for the Adalight greeting.
+    /// <para>
+    /// Opening a port asserts DTR, which resets most Arduino-based boards - including someone else's 3D printer or CNC
+    /// controller in the middle of a job - and disturbs modem AT ports. Since the app runs 24/7, only ports that can
+    /// plausibly be ours are probed periodically (with backoff): the remembered port, ports with the remembered USB id
+    /// and known USB-serial chips (ranks 0..2 of <see cref="OrderCandidates"/>). Any other port ("unknown", rank 3)
+    /// is probed at most once per arrival:
+    /// </para>
+    /// <list type="bullet">
+    /// <item>when it newly appears in SERIALCOMM - but if a device is remembered, only while no rank 0..2 candidate
+    /// is present;</item>
+    /// <item>once on the first scan after start, only when nothing is remembered and no rank 0..2 candidate exists.</item>
+    /// </list>
+    /// <para>Modem-class ports are never opened in auto mode. <see cref="Rescan"/> (WM_DEVICECHANGE) does not re-probe
+    /// unknown ports. A fixed port (not Auto) is handled by <see cref="OpenFixed"/> and unaffected.</para>
+    /// </summary>
     private (ISerialLink Link, SerialPortInfo Info)? AutoDetect(int baud)
     {
         if (_status != DeviceStatus.PortBusy) SetStatus(DeviceStatus.Searching, null);
@@ -328,6 +352,7 @@ public sealed class AdalightDevice : ILedDevice
         {
             bool rescan = Interlocked.Exchange(ref _rescan, 0) != 0;
             var present = SafePresentPorts();
+            var arrived = NotePresentPorts(present);
 
             // Forget ports that disappeared: when they come back they are probed immediately.
             if (_probe.Count > 0)
@@ -337,7 +362,15 @@ public sealed class AdalightDevice : ILedDevice
 
             string? lastPort, lastUsbId;
             lock (_cfgLock) { lastPort = _lastPort; lastUsbId = _lastUsbId; }
-            var candidates = OrderCandidates(SafeListPorts().Where(p => present.Contains(p.PortName)), lastPort, lastUsbId);
+            var listed = SafeListPorts().Where(p => present.Contains(p.PortName) && !p.IsBluetooth).ToList();
+            var modems = SafeModemPorts();
+            foreach (var m in listed)
+            {
+                if (modems.Contains(m.PortName) && _oneShotSettled.Add(m.PortName))
+                    Log.Info($"Adalight: {m.PortName} ({m.Description}) is a modem port; auto-detect never opens it");
+            }
+            var candidates = OrderCandidates(listed.Where(p => !modems.Contains(p.PortName)), lastPort, lastUsbId);
+            ClassifyUnknownPorts(candidates, arrived, remembered: lastPort is not null || lastUsbId is not null);
             int sameUsbId = lastUsbId is null ? 0 : candidates.Count(c => EqId(c.Info.UsbId, lastUsbId));
 
             string? busy = null;
@@ -345,7 +378,11 @@ public sealed class AdalightDevice : ILedDevice
             {
                 if (Interrupted()) return null;
                 bool preferred = rank <= 2;
-                if (_probe.TryGetValue(info.PortName, out var st))
+                if (!preferred)
+                {
+                    if (!_oneShotPending.Contains(info.PortName)) continue; // unknown port: its one probe is used up
+                }
+                else if (_probe.TryGetValue(info.PortName, out var st))
                 {
                     bool due = Stopwatch.GetTimestamp() >= st.RetryAt || (rescan && st.Last == ProbeOutcome.OpenFailed);
                     if (!due)
@@ -365,6 +402,7 @@ public sealed class AdalightDevice : ILedDevice
                 {
                     case ProbeOutcome.Success:
                         _probe.Remove(info.PortName);
+                        _oneShotPending.Remove(info.PortName);
                         lock (_cfgLock)
                         {
                             _lastPort = info.PortName;
@@ -373,8 +411,13 @@ public sealed class AdalightDevice : ILedDevice
                         RaiseDeviceFound(info);
                         return (link!, info);
                     case ProbeOutcome.Interrupted:
-                        return null;
+                        return null; // a pending one-shot probe stays pending
                     default:
+                        if (!preferred)
+                        {
+                            _oneShotPending.Remove(info.PortName);
+                            _oneShotSettled.Add(info.PortName);
+                        }
                         RecordFailure(info, outcome, rank <= 1);
                         if (outcome == ProbeOutcome.Busy && preferred) busy ??= info.PortName;
                         break;
@@ -394,6 +437,53 @@ public sealed class AdalightDevice : ILedDevice
             _control.WaitOne(_opt.RescanIntervalMs);
         }
         return null;
+    }
+
+    /// <summary>
+    /// Decides once per presence whether each unknown (rank 3) port gets its single probe (→ <see cref="_oneShotPending"/>)
+    /// or is left alone (→ <see cref="_oneShotSettled"/>). See <see cref="AutoDetect"/> for the rules.
+    /// </summary>
+    private void ClassifyUnknownPorts(List<(SerialPortInfo Info, int Rank)> candidates, HashSet<string> arrived, bool remembered)
+    {
+        bool startup = !_startupScanDone;
+        _startupScanDone = true;
+        bool anyPreferred = candidates.Any(c => c.Rank <= 2);
+        List<string>? skipped = null;
+        foreach (var (info, rank) in candidates)
+        {
+            if (rank <= 2 || _oneShotPending.Contains(info.PortName) || _oneShotSettled.Contains(info.PortName)) continue;
+            bool probeOnce = arrived.Contains(info.PortName)
+                ? !remembered || !anyPreferred
+                : startup && !remembered && !anyPreferred;
+            if (probeOnce)
+            {
+                _oneShotPending.Add(info.PortName);
+            }
+            else
+            {
+                _oneShotSettled.Add(info.PortName);
+                (skipped ??= []).Add($"{info.PortName} ({info.Description}{(info.UsbId is null ? "" : ", " + info.UsbId)})");
+            }
+        }
+        if (skipped is not null)
+            Log.Info($"Adalight: not probing {string.Join(", ", skipped)}: not a known USB-serial adapter " +
+                     "(opening it could reset another device). Select the port in the settings to use it.");
+    }
+
+    /// <summary>Records the present port set; returns the ports that appeared since the previous successful read.</summary>
+    private HashSet<string> NotePresentPorts(IReadOnlyCollection<string> present)
+    {
+        var arrived = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (_presentReadFailed) return arrived; // unknown: don't treat the next good read as a mass arrival
+        if (_seenPorts is not null)
+        {
+            foreach (var p in present)
+                if (!_seenPorts.Contains(p)) arrived.Add(p);
+        }
+        _seenPorts = new HashSet<string>(present, StringComparer.OrdinalIgnoreCase);
+        _oneShotPending.RemoveWhere(p => !_seenPorts.Contains(p));
+        _oneShotSettled.RemoveWhere(p => !_seenPorts.Contains(p));
+        return arrived;
     }
 
     /// <summary>
@@ -495,7 +585,9 @@ public sealed class AdalightDevice : ILedDevice
         while (!Interrupted())
         {
             Interlocked.Exchange(ref _rescan, 0);
-            if (!SafePresentPorts().Contains(port))
+            var present = SafePresentPorts();
+            NotePresentPorts(present);
+            if (!present.Contains(port))
             {
                 if (lastProblem != "absent") Log.Info($"Adalight: waiting for {port} to appear");
                 lastProblem = "absent";
@@ -637,7 +729,9 @@ public sealed class AdalightDevice : ILedDevice
                 if (Interlocked.Exchange(ref _rescan, 0) != 0) nextPresence = now;
                 if (now >= nextPresence)
                 {
-                    if (!SafePresentPorts().Contains(port)) { lostReason = "port removed"; break; }
+                    var present = SafePresentPorts();
+                    NotePresentPorts(present); // ports plugged in while connected are not "arrivals" later
+                    if (!present.Contains(port)) { lostReason = "port removed"; break; }
                     link.DiscardInput(); // firmware chatter must never fill the RX buffer
                     nextPresence = now + presenceInterval;
                 }
@@ -806,17 +900,29 @@ public sealed class AdalightDevice : ILedDevice
         try
         {
             var p = _ports.GetPresentPortNames();
+            _presentReadFailed = false;
             return p is HashSet<string> { Comparer: var c } hs && c.Equals(StringComparer.OrdinalIgnoreCase)
                 ? hs
                 : new HashSet<string>(p, StringComparer.OrdinalIgnoreCase);
         }
         catch (Exception ex)
         {
+            _presentReadFailed = true;
             Log.Warn($"Adalight: reading present ports failed: {ex.Message}");
             // Unknown: assume the current port is still there rather than dropping a working connection.
             var hs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (_portName is { } cur) hs.Add(cur);
             return hs;
+        }
+    }
+
+    private IReadOnlyCollection<string> SafeModemPorts()
+    {
+        try { return _ports.GetModemPortNames(); }
+        catch (Exception ex)
+        {
+            Log.Warn($"Adalight: listing modem ports failed: {ex.Message}");
+            return Array.Empty<string>();
         }
     }
 

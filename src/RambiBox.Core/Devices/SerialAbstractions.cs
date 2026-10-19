@@ -38,6 +38,12 @@ internal interface IPortEnumerator
 
     /// <summary>Present ports with description, USB id and Bluetooth flag. Cached while the port set is unchanged.</summary>
     IReadOnlyList<SerialPortInfo> ListPorts();
+
+    /// <summary>
+    /// Present ports that belong to the Modem device class (GUID_DEVCLASS_MODEM: built-in/USB modems, phone and
+    /// LTE-module AT ports). Auto-detect never opens these. Cached while the port set is unchanged.
+    /// </summary>
+    IReadOnlyCollection<string> GetModemPortNames();
 }
 
 /// <summary>Timing knobs; defaults are for real hardware, tests shrink them.</summary>

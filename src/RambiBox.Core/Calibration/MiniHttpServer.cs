@@ -16,34 +16,46 @@ internal sealed record MiniHttpResponse(int Status, string ContentType, byte[] B
 /// <summary>
 /// Minimal HTTP/1.1 server on a raw <see cref="TcpListener"/> (HttpListener would need an admin URL ACL to listen on
 /// the LAN). One request per connection (Connection: close), bounded header/body sizes, read timeouts and a cap on
-/// concurrent connections. Never throws out of its background tasks.
+/// concurrent connections, both in total and per client IP (so one LAN host holding connections open with slow
+/// headers cannot lock the phone out). Never throws out of its background tasks.
 /// </summary>
 internal sealed class MiniHttpServer : IDisposable
 {
     public const int MaxHeaderBytes = 16 * 1024;
     public const int MaxConcurrent = 16;
+    /// <summary>Concurrent connections allowed per client IP; more are answered 503 at once.</summary>
+    public const int MaxPerClient = 4;
 
     private readonly Func<MiniHttpRequest, CancellationToken, Task<MiniHttpResponse>> _handler;
-    private readonly Func<string, string, bool> _accepts;
+    private readonly Func<string, string, IPAddress, MiniHttpResponse?> _precheck;
     private readonly int _maxBodyBytes;
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private readonly SemaphoreSlim _slots = new(MaxConcurrent, MaxConcurrent);
+    private readonly Dictionary<IPAddress, int> _perClient = new();
     private int _activeTasks;
 
-    /// <param name="accepts">(method, path) → whether the route exists; checked before reading a request body so
-    /// unauthorized requests are rejected without accepting their upload.</param>
+    /// <param name="precheck">(method, path, client IP) → null to accept the request, or the response to reject it
+    /// with (unknown route, forbidden client, ...). Runs before the request body is read, so rejected requests never
+    /// get their upload accepted.</param>
     public MiniHttpServer(Func<MiniHttpRequest, CancellationToken, Task<MiniHttpResponse>> handler,
-        Func<string, string, bool> accepts, int maxBodyBytes)
+        Func<string, string, IPAddress, MiniHttpResponse?> precheck, int maxBodyBytes)
     {
         _handler = handler;
-        _accepts = accepts;
+        _precheck = precheck;
         _maxBodyBytes = maxBodyBytes;
     }
 
     public int Port { get; private set; }
-    public TimeSpan HeaderTimeout { get; init; } = TimeSpan.FromSeconds(10);
+    /// <summary>Time allowed for the request line + headers; slow-header clients are dropped after this.</summary>
+    public TimeSpan HeaderTimeout { get; init; } = TimeSpan.FromSeconds(5);
     public TimeSpan BodyTimeout { get; init; } = TimeSpan.FromSeconds(120);
+
+    /// <summary>Client IP of a connection. Tests substitute other addresses to simulate several LAN hosts.</summary>
+    internal Func<IPEndPoint, IPAddress> ClientAddress { get; init; } = ep => ep.Address;
+
+    /// <summary>Connections currently being served (tests).</summary>
+    internal int ActiveConnections => Volatile.Read(ref _activeTasks);
 
     /// <summary>Binds to 0.0.0.0 on the first free port in [first, last]. Returns false if none is free.</summary>
     public bool Start(int firstPort, int lastPort)
@@ -102,33 +114,93 @@ internal sealed class MiniHttpServer : IDisposable
                 break;
             }
 
+            IPAddress? ip = null;
+            try
+            {
+                if (client.Client.RemoteEndPoint is IPEndPoint ep)
+                {
+                    ip = ClientAddress(ep);
+                    if (ip.IsIPv4MappedToIPv6) ip = ip.MapToIPv4();
+                }
+            }
+            catch (Exception ex) when (ex is SocketException or ObjectDisposedException) { }
+            if (ip is null || !LanAddress.IsAllowedClient(ip))
+            {
+                try { client.Dispose(); } catch { } // not from the local network: close without a word
+                continue;
+            }
+            if (!TryEnterClient(ip))
+            {
+                Reject(client, "Too many connections from this device."); // per-IP cap
+                continue;
+            }
             if (!_slots.Wait(0))
             {
-                client.Dispose(); // too many concurrent connections: drop
+                LeaveClient(ip);
+                Reject(client, "Server busy."); // too many concurrent connections in total
                 continue;
             }
             Interlocked.Increment(ref _activeTasks);
+            var clientIp = ip;
             _ = Task.Run(async () =>
             {
-                try { await Serve(client, ct).ConfigureAwait(false); }
+                try { await Serve(client, clientIp, ct).ConfigureAwait(false); }
                 catch (Exception ex) when (ex is OperationCanceledException or IOException or SocketException or ObjectDisposedException) { }
                 catch (Exception ex) { Log.Warn($"Calibration server: request failed: {ex.Message}"); }
                 finally
                 {
                     try { client.Dispose(); } catch { }
                     Interlocked.Decrement(ref _activeTasks);
+                    LeaveClient(clientIp);
                     _slots.Release();
                 }
             });
         }
     }
 
-    private async Task Serve(TcpClient client, CancellationToken serverCt)
+    private bool TryEnterClient(IPAddress ip)
+    {
+        lock (_perClient)
+        {
+            _perClient.TryGetValue(ip, out int n);
+            if (n >= MaxPerClient) return false;
+            _perClient[ip] = n + 1;
+            return true;
+        }
+    }
+
+    private void LeaveClient(IPAddress ip)
+    {
+        lock (_perClient)
+        {
+            if (!_perClient.TryGetValue(ip, out int n)) return;
+            if (n <= 1) _perClient.Remove(ip);
+            else _perClient[ip] = n - 1;
+        }
+    }
+
+    /// <summary>
+    /// Answers 503 right away and closes the connection. Runs on the accept loop: a ~200-byte write into a fresh
+    /// socket's empty send buffer does not block in practice, and a send timeout bounds it anyway.
+    /// </summary>
+    private static void Reject(TcpClient client, string message)
+    {
+        try
+        {
+            client.Client.SendTimeout = 500;
+            client.Client.Send(Format(MiniHttpResponse.Text(503, message), headOnly: false));
+            client.Client.Shutdown(SocketShutdown.Send);
+        }
+        catch (Exception ex) when (ex is SocketException or ObjectDisposedException or IOException) { }
+        finally
+        {
+            try { client.Dispose(); } catch { }
+        }
+    }
+
+    private async Task Serve(TcpClient client, IPAddress remote, CancellationToken serverCt)
     {
         client.NoDelay = true;
-        if (client.Client.RemoteEndPoint is not IPEndPoint remote || !LanAddress.IsAllowedClient(remote.Address))
-            return; // not from the local network: close without a word
-
         var stream = client.GetStream();
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(serverCt);
         cts.CancelAfter(HeaderTimeout);
@@ -169,9 +241,9 @@ internal sealed class MiniHttpServer : IDisposable
             headers[lines[i][..c].Trim()] = lines[i][(c + 1)..].Trim();
         }
 
-        if (!_accepts(method, path))
+        if (_precheck(method, path, remote) is { } rejection)
         {
-            await Write(stream, MiniHttpResponse.Text(404, "Not found"), cts.Token).ConfigureAwait(false);
+            await Write(stream, rejection, cts.Token, method == "HEAD").ConfigureAwait(false);
             return;
         }
 
@@ -206,7 +278,7 @@ internal sealed class MiniHttpServer : IDisposable
             }
         }
 
-        var req = new MiniHttpRequest(method, path, query, headers, body, remote.Address);
+        var req = new MiniHttpRequest(method, path, query, headers, body, remote);
         MiniHttpResponse resp;
         try { resp = await _handler(req, serverCt).ConfigureAwait(false); }
         catch (Exception ex)
@@ -228,6 +300,14 @@ internal sealed class MiniHttpServer : IDisposable
 
     private static async Task Write(NetworkStream stream, MiniHttpResponse r, CancellationToken ct, bool headOnly = false)
     {
+        await stream.WriteAsync(Format(r, headOnly: true), ct).ConfigureAwait(false);
+        if (!headOnly && r.Body.Length > 0) await stream.WriteAsync(r.Body, ct).ConfigureAwait(false);
+        await stream.FlushAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Status line + headers, followed by the body unless <paramref name="headOnly"/>.</summary>
+    private static byte[] Format(MiniHttpResponse r, bool headOnly)
+    {
         var sb = new StringBuilder();
         sb.Append("HTTP/1.1 ").Append(r.Status).Append(' ').Append(Reason(r.Status)).Append("\r\n");
         sb.Append("Content-Type: ").Append(r.ContentType).Append("\r\n");
@@ -240,15 +320,18 @@ internal sealed class MiniHttpServer : IDisposable
             foreach (var kv in r.Headers) sb.Append(kv.Key).Append(": ").Append(kv.Value).Append("\r\n");
         sb.Append("\r\n");
         var head = Encoding.ASCII.GetBytes(sb.ToString());
-        await stream.WriteAsync(head, ct).ConfigureAwait(false);
-        if (!headOnly && r.Body.Length > 0) await stream.WriteAsync(r.Body, ct).ConfigureAwait(false);
-        await stream.FlushAsync(ct).ConfigureAwait(false);
+        if (headOnly || r.Body.Length == 0) return head;
+        var all = new byte[head.Length + r.Body.Length];
+        head.CopyTo(all, 0);
+        r.Body.CopyTo(all, head.Length);
+        return all;
     }
 
     private static string Reason(int s) => s switch
     {
         200 => "OK",
         400 => "Bad Request",
+        403 => "Forbidden",
         404 => "Not Found",
         405 => "Method Not Allowed",
         409 => "Conflict",

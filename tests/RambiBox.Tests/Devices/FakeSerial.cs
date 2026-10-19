@@ -11,6 +11,8 @@ internal sealed class FakeDevice
     public string Description { get; init; } = "USB-SERIAL CH340";
     public string? UsbId { get; init; } = "1A86:7523";
     public bool IsBluetooth { get; init; }
+    /// <summary>Port belongs to the Modem device class.</summary>
+    public bool IsModem { get; init; }
 
     /// <summary>Open throws UnauthorizedAccessException.</summary>
     public volatile bool Busy;
@@ -72,6 +74,18 @@ internal sealed class FakeEnvironment : IPortEnumerator, ISerialLinkFactory
                 .Select(d => new SerialPortInfo(d.Port, d.Description, d.IsBluetooth ? null : d.UsbId) { IsBluetooth = d.IsBluetooth })
                 .OrderBy(p => p.PortName, StringComparer.Ordinal)
                 .ToList();
+    }
+
+    public IReadOnlyCollection<string> GetModemPortNames()
+    {
+        lock (_lock)
+            return new HashSet<string>(_devices.Values.Where(d => d.IsModem).Select(d => d.Port), StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>How often each port was opened.</summary>
+    public int OpenCountOf(string port)
+    {
+        lock (_lock) return OpenLog.Count(p => p.Equals(port, StringComparison.OrdinalIgnoreCase));
     }
 
     public ISerialLink Open(string portName, int baudRate)

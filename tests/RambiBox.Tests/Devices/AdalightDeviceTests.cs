@@ -251,7 +251,7 @@ public class AdalightDeviceTests
     [Fact]
     public void Auto_FailedPortIsRetriedWithBackoff_NotHammered()
     {
-        var com3 = new FakeDevice { Port = "COM3", UsbId = "1234:0001", Greets = false };
+        var com3 = new FakeDevice { Port = "COM3", UsbId = "0403:6001", Greets = false }; // known chip: retried (unknown ports: once)
         var (dev, _) = Create(com3);
         using (dev)
         {
