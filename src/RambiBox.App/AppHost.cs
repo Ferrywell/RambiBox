@@ -549,10 +549,11 @@ public sealed class AppHost : IDisposable
     {
         var d = Settings.Device;
         var oldType = d.Type;
-        device.ApplyTo(d);
+        device = DeviceCatalog.ForCurrentProtocol(device, d); // a WLED found while DDP / E1.31 is selected keeps that protocol
+        device.ApplyTo(d); // an unverified serial port keeps the user's serial protocol
         d.Name = device.DisplayName;
-        d.BaudRate = DeviceCatalog.BaudAfterTypeChange(oldType, device.Type, d.BaudRate);
-        Log.Info($"Using {device.DisplayName} ({DeviceCatalog.Get(device.Type).Name})");
+        d.BaudRate = DeviceCatalog.BaudAfterTypeChange(oldType, d.Type, d.BaudRate);
+        Log.Info($"Using {device.DisplayName} ({DeviceCatalog.Get(d.Type).Name})");
         SetAutoDetectNotice(null);
         Commit(this);
     }

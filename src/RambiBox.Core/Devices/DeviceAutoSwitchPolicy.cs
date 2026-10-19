@@ -59,8 +59,9 @@ public static class DeviceAutoSwitchPolicy
     public static AutoSwitchDecision Decide(DeviceSettings current, bool firstRunWithoutImport,
         IReadOnlyList<DiscoveredDevice> found, Func<DeviceType, bool> isSupported)
     {
+        // Unverified candidates (a USB-serial port that didn't greet: maybe a 3D printer) are only listed in the UI.
         var candidates = found
-            .Where(d => d.Type != DeviceType.Virtual && isSupported(d.Type) && !IsCurrent(current, d))
+            .Where(d => d.Verified && d.Type != DeviceType.Virtual && isSupported(d.Type) && !IsCurrent(current, d))
             .GroupBy(d => (d.Type, Id: d.Id.ToUpperInvariant()))
             .Select(g => g.First())
             .ToList();

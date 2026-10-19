@@ -45,7 +45,7 @@ public static class DeviceCatalog
         new(DeviceType.Wled, DeviceFamily.Network, "WLED", "ESP8266/ESP32 with WLED over Wi-Fi or Ethernet (realtime UDP)."),
         new(DeviceType.Ddp, DeviceFamily.Network, "DDP", "Distributed Display Protocol – WLED, xLights controllers, ESPixelStick."),
         new(DeviceType.E131, DeviceFamily.Network, "E1.31 / sACN", "DMX over Ethernet – Falcon, WLED and other pixel controllers."),
-        new(DeviceType.AlienFx, DeviceFamily.Other, "Alienware AlienFX", "The built-in lighting of Alienware PCs and peripherals."),
+        new(DeviceType.AlienFx, DeviceFamily.Other, "Alienware AlienFX", "The built-in lighting of Alienware PCs – requires Alienware Command Center (LightFX)."),
         new(DeviceType.Virtual, DeviceFamily.Other, "Virtual (no hardware)", "Shows the colors only in the app's preview – for testing and demos."),
     ];
 
@@ -69,7 +69,7 @@ public static class DeviceCatalog
     /// <summary>Baud rate presets for the editable baud box, most common first.</summary>
     public static IReadOnlyList<int> BaudPresets(DeviceType t) => t switch
     {
-        DeviceType.Awa => [2_000_000, 921_600, 1_000_000, 1_500_000, 3_000_000, 4_000_000],
+        DeviceType.Awa => [2_000_000, 1_500_000, 1_000_000, 921_600],
         _ => [115_200, 230_400, 250_000, 460_800, 500_000, 921_600, 1_000_000, 2_000_000, 57_600, 38_400, 19_200, 9_600],
     };
 
@@ -101,6 +101,13 @@ public static class DeviceCatalog
         return n == 1 ? $"universe {startUniverse}" : $"universes {startUniverse}–{startUniverse + n - 1}";
     }
 
+    /// <summary>
+    /// The device to apply when the user picks a found controller: WLED discovery reports WLED entries, but a WLED
+    /// controller also speaks DDP and E1.31 – when one of those protocols is selected it is kept.
+    /// </summary>
+    public static DiscoveredDevice ForCurrentProtocol(DiscoveredDevice found, DeviceSettings current) =>
+        found.Type == DeviceType.Wled && current.Type is DeviceType.Ddp or DeviceType.E131 ? found with { Type = current.Type } : found;
+
     // ------------------------------------------------------------------ status texts
 
     /// <summary>
@@ -123,8 +130,9 @@ public static class DeviceCatalog
                 if (!string.IsNullOrWhiteSpace(s.Host)) return s.Host;
                 return string.IsNullOrWhiteSpace(activePort) ? $"{info.Name} (no address set)" : activePort;
             case DeviceFamily.UsbHid:
+                if (!string.IsNullOrWhiteSpace(activePort)) return activePort; // "Lightpack ABC123", "Lightpack (2 devices)"
                 if (!string.IsNullOrWhiteSpace(s.Name)) return s.Name;
-                return string.IsNullOrWhiteSpace(s.DeviceId) ? "Lightpack" : $"Lightpack {s.DeviceId}";
+                return string.IsNullOrWhiteSpace(s.DeviceId) || s.DeviceId == "*" ? "Lightpack" : $"Lightpack {s.DeviceId}";
             default:
                 return s.Type == DeviceType.Virtual ? "the virtual device" : info.Name;
         }
@@ -167,8 +175,10 @@ public static class DeviceCatalog
         DeviceFamily.UsbHid => "Plug in the Lightpack's USB cable.",
         DeviceFamily.Network when string.IsNullOrWhiteSpace(s.Host) && !(s.Type == DeviceType.E131 && s.E131Multicast) =>
             "Use Find devices on the Device page, or enter its IP address.",
+        DeviceFamily.Network when s.Type == DeviceType.Wled =>
+            "Check that it is powered on and on the same network, and that \"Receive UDP realtime\" is on in WLED's Sync settings.",
         DeviceFamily.Network => "Check that the controller is powered on and on the same network as this PC.",
-        _ when s.Type == DeviceType.AlienFx => "Needs an Alienware PC with Alienware Command Center (AlienFX) installed.",
+        _ when s.Type == DeviceType.AlienFx => "Requires Alienware Command Center (LightFX) on an Alienware PC.",
         _ => "",
     };
 }

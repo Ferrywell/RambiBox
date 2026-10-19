@@ -146,6 +146,18 @@ public class DeviceSetupLogicTests
     }
 
     [Fact]
+    public void Unverified_serial_candidates_never_switch_or_nag()
+    {
+        // a silent USB-serial port (could be a 3D printer) while a configured WLED is offline
+        var wled = new DeviceSettings { Type = DeviceType.Wled, Host = "192.168.2.40" };
+        var silent = Serial(DeviceType.Adalight, "COM5") with { Verified = false };
+        Assert.Equal(AutoSwitchAction.None, DeviceAutoSwitchPolicy.Decide(wled, false, [silent], AllSupported).Action);
+        Assert.Equal(AutoSwitchAction.None, DeviceAutoSwitchPolicy.Decide(wled, true, [silent], AllSupported).Action);
+        // ...and don't turn one real find into a "choose one"
+        Assert.Equal(AutoSwitchAction.Switch, DeviceAutoSwitchPolicy.Decide(new DeviceSettings(), true, [silent, Wled()], AllSupported).Action);
+    }
+
+    [Fact]
     public void Types_without_a_driver_are_ignored()
     {
         var d = DeviceAutoSwitchPolicy.Decide(new DeviceSettings(), true, [Wled()], t => t != DeviceType.Wled);
@@ -199,6 +211,26 @@ public class DeviceSetupLogicTests
         Assert.Equal("Connected to sACN multicast", DeviceCatalog.ConnectedText(multicast, null));
 
         Assert.Equal("Virtual device (preview only)", DeviceCatalog.ConnectedText(new DeviceSettings { Type = DeviceType.Virtual }, "Virtual"));
+    }
+
+    [Fact]
+    public void A_found_WLED_keeps_a_selected_DDP_or_E131_protocol()
+    {
+        Assert.Equal(DeviceType.Ddp, DeviceCatalog.ForCurrentProtocol(Wled(), new DeviceSettings { Type = DeviceType.Ddp }).Type);
+        Assert.Equal(DeviceType.E131, DeviceCatalog.ForCurrentProtocol(Wled(), new DeviceSettings { Type = DeviceType.E131 }).Type);
+        Assert.Equal(DeviceType.Wled, DeviceCatalog.ForCurrentProtocol(Wled(), new DeviceSettings()).Type);
+        var serial = Serial(DeviceType.Adalight, "COM3");
+        Assert.Same(serial, DeviceCatalog.ForCurrentProtocol(serial, new DeviceSettings { Type = DeviceType.Ddp }));
+    }
+
+    [Fact]
+    public void Unverified_serial_candidate_keeps_the_chosen_serial_protocol()
+    {
+        // contract of DiscoveredDevice.ApplyTo that the "Use this" button relies on
+        var s = new DeviceSettings { Type = DeviceType.Awa };
+        (Serial(DeviceType.Adalight, "COM6") with { Verified = false }).ApplyTo(s);
+        Assert.Equal(DeviceType.Awa, s.Type);
+        Assert.Equal("COM6", s.Port);
     }
 
     [Theory]
