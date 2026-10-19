@@ -503,11 +503,21 @@ install.cmd</code></pre>
         <div class="section-head">
           <p class="eyebrow">Hardware</p>
           <h2 id="hw-title">Works with the strip you already have.</h2>
-          <p>If AmbiBox could drive it as an Adalight device, RambiBox can too.</p>
+          <p>Everything Prismatik drives on Windows — USB serial, Lightpack, WLED, AlienFX — plus DDP and E1.31. <b>Find devices</b> sets it up for you.</p>
         </div>
         <div class="hw-grid">
           <div class="card">
-            <h3>Controller</h3>
+            <h3>Controllers</h3>
+            <ul>
+              <li><b>USB serial:</b> Adalight, Ardulight, AWA / HyperSerial, TPM2</li>
+              <li><b>USB HID:</b> Lightpack &amp; Lightpack 2 (chained)</li>
+              <li><b>Network:</b> WLED (WARLS / DRGB / DNRGB, found via mDNS), DDP, E1.31 / sACN</li>
+              <li><b>Alienware AlienFX</b> and a virtual device for testing</li>
+              <li><b>Prismatik API</b> on TCP 3636 for Home Assistant &amp; scripts (optional)</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Adalight hardware</h3>
             <ul>
               <li><b>Arduino</b> Nano, Uno, Pro Micro, Leonardo and clones</li>
               <li>USB-serial chips <b>CH340/CH341/CH9102</b>, <b>FTDI</b> FT232R/FT-X, <b>CP210x</b> and Arduino's own USB</li>

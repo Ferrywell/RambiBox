@@ -55,6 +55,17 @@ were made with the built-in `--demo` mode, which shows a synthetic scene instead
 - **HDR** desktops are tone-mapped, so the LEDs look like the SDR picture.
 - **Black bars** from letterbox and pillarbox films are detected and skipped.
 - **Static color** and **mood light**: color cycle, rainbow or breathing.
+- **Works with the controllers Prismatik supports** (Windows), plus a few more:
+  - USB serial: **Adalight**, **Ardulight**, **AWA / HyperSerial** (up to 2 Mbaud) and **TPM2**.
+  - USB HID: **Lightpack** and Lightpack 2 (several chained).
+  - Network: **WLED** over Wi-Fi with Prismatik's realtime protocols (WARLS, DRGB, DNRGB), **DDP** and
+    **E1.31 / sACN** (unicast or multicast).
+  - **Alienware AlienFX** through Alienware Command Center's LightFX, and a **virtual** device for testing.
+  - **Find devices** scans USB and your network (WLED via mDNS) and sets everything up in one click, including the
+    LED count the controller reports.
+- **Prismatik-compatible API** (optional, off by default). Speaks Prismatik's API on TCP 3636, so existing
+  integrations work unchanged: Home Assistant components, the Python `lightpack` library, Stream Deck plugins and
+  scripts. Local-only by default; LAN access only for private addresses, with an optional API key.
 - **Automatic controller detection.**
   - Finds the controller ~65 ms after start.
   - Reconnects automatically when you plug the USB cable into another port, even with a new COM number.
@@ -176,9 +187,22 @@ See [SECURITY.md](SECURITY.md) for how the calibration server is protected.
 
 ## Supported hardware
 
+| Controller type | Connection | Notes |
+|---|---|---|
+| **Adalight** | USB serial | Arduino + WS281x with an Adalight sketch (FastLED "LEDstream", the AmbiBox setup). Auto-detected by its `Ada` greeting. |
+| **Ardulight** | USB serial | Prismatik's Ardulight protocol. Choose the port once; afterwards it is found again after re-plugging. |
+| **AWA / HyperSerial** | USB serial | HyperSerialESP32/ESP8266 firmware (HyperHDR). Default 2,000,000 baud; auto-detected by its handshake. |
+| **TPM2** | USB serial | TPM2 serial protocol. Choose the port once. |
+| **Lightpack** | USB HID | Lightpack 1 and 2 (10 LEDs each), several devices chained like in Prismatik. |
+| **WLED** | Wi-Fi (UDP) | Realtime protocols WARLS / DRGB / DNRGB, chosen automatically by LED count. Found automatically via mDNS; follows the device if its IP changes. |
+| **DDP** | Network (UDP 4048) | WLED, ESPixelStick, xLights controllers… |
+| **E1.31 / sACN** | Network (UDP 5568) | 170 LEDs per universe, unicast or multicast. |
+| **Alienware AlienFX** | Alienware Command Center | Uses LightFX like Prismatik: the lights show the averaged screen color. |
+| **Virtual** | — | No hardware; colors show only in the app's preview. |
+
 | | |
 |---|---|
-| **Controller** | Arduino Nano, Uno, Pro Micro, Leonardo and clones running an **Adalight-compatible sketch** that sends the `Ada` greeting on start, e.g. the FastLED Adalight/"LEDstream" sketch used with AmbiBox. |
+| **Adalight controller** | Arduino Nano, Uno, Pro Micro, Leonardo and clones running an **Adalight-compatible sketch** that sends the `Ada` greeting on start, e.g. the FastLED Adalight/"LEDstream" sketch used with AmbiBox. |
 | **USB-serial chips** | CH340/CH341/CH9102, FTDI FT232R/FT-X, Silicon Labs CP210x and Arduino's own USB (VID 2341/2A03) are recognized for auto-detect. Other chips work with a fixed port. |
 | **Link** | **115200 baud** by default; other rates can be chosen on the Device page. RGB, GRB and other color orders are supported. |
 | **LEDs** | WS2812B, WS2811, SK6812 and anything else your sketch drives. Any count and start corner, clockwise or counter-clockwise. |
