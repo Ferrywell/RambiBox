@@ -11,16 +11,21 @@ internal sealed record ScreenDetection(Homography ScreenToPhoto, PointD[] Corner
 /// <summary>
 /// Finds the four corner markers of the calibration pattern in a photo:
 /// downscale → adaptive threshold → connected components → (square outline + one centered hole) test →
-/// choose the 4 markers forming the largest plausible convex quad → homography (refined with all marker corners).
-/// Pure managed code, deterministic.
+/// choose the 4 markers forming the largest plausible convex quad → decide which marker is which screen corner
+/// (orientation-agnostic: the phone may be held in portrait or rolled by any angle) → homography (refined with all
+/// marker corners). Pure managed code, deterministic.
 /// </summary>
 internal static class FiducialDetector
 {
-    public const int DetectLongSide = 1000;
+    /// <summary>
+    /// Pixel budget of the detection image. A pixel budget (instead of a long-side limit) keeps portrait frames, where
+    /// the landscape monitor covers only ~40 % of the frame width, at full resolution (e.g. 900×1600).
+    /// </summary>
+    public const int DetectMaxPixels = 1_500_000;
 
     public static ScreenDetection? Detect(RgbImage photo, CalibrationLayout layout)
     {
-        var (lum, w, h, sx, sy) = DownscaleLuma(photo, DetectLongSide);
+        var (lum, w, h, sx, sy) = DownscaleLuma(photo, DetectMaxPixels);
         int longSide = Math.Max(w, h);
         foreach (int win in new[] { longSide / 8, longSide / 4, longSide / 16 })
         {
@@ -28,8 +33,10 @@ internal static class FiducialDetector
             var cands = FindMarkers(mask, w, h);
             // Largest plausible quads first; the first one whose reference bands are really where the pattern
             // says they should be wins (rejects e.g. reflections of the markers on a glossy desk).
-            foreach (var chosen in ChooseFour(cands, layout))
+            foreach (var quad in ChooseFour(cands, layout))
             {
+                var chosen = Orient(quad, lum, w, h, layout);
+                if (chosen is null) continue;
                 var H = FitHomography(chosen, layout);
                 if (H is null || !Verify(H, lum, w, h, layout)) continue;
                 var full = H.ScaledOutput(sx, sy);
@@ -116,11 +123,14 @@ internal static class FiducialDetector
 
     // ------------------------------------------------------------------ image prep
 
-    /// <summary>Box-filter downscale to a luminance plane (sRGB-encoded 0..255). Returns the scale factors back to full res.</summary>
-    internal static (float[] Lum, int W, int H, double Sx, double Sy) DownscaleLuma(RgbImage img, int maxLong)
+    /// <summary>
+    /// Box-filter downscale to a luminance plane (sRGB-encoded 0..255) of at most <paramref name="maxPixels"/> pixels.
+    /// Returns the scale factors back to full res.
+    /// </summary>
+    internal static (float[] Lum, int W, int H, double Sx, double Sy) DownscaleLuma(RgbImage img, int maxPixels)
     {
         int W = img.Width, Ht = img.Height;
-        double s = Math.Max(1.0, (double)Math.Max(W, Ht) / maxLong);
+        double s = Math.Max(1.0, Math.Sqrt((double)W * Ht / maxPixels));
         int w = Math.Max(1, (int)Math.Round(W / s)), h = Math.Max(1, (int)Math.Round(Ht / s));
         double sx = (double)W / w, sy = (double)Ht / h;
         var lum = new float[w * h];
@@ -311,7 +321,7 @@ internal static class FiducialDetector
 
     // ------------------------------------------------------------------ selection
 
-    /// <summary>Plausible marker quadruples (ordered TL, TR, BR, BL), largest quad area first (at most 64).</summary>
+    /// <summary>Plausible marker quadruples (clockwise, see <see cref="Order"/>), largest quad area first (at most 64).</summary>
     internal static List<MarkerCandidate[]> ChooseFour(List<MarkerCandidate> cands, CalibrationLayout layout)
     {
         var found = new List<(double Area, MarkerCandidate[] Quad)>();
@@ -350,7 +360,10 @@ internal static class FiducialDetector
         return found.OrderByDescending(f => f.Area).Take(64).Select(f => f.Quad).ToList();
     }
 
-    /// <summary>Orders 4 candidates TL, TR, BR, BL (clockwise on screen, image y pointing down).</summary>
+    /// <summary>
+    /// Orders 4 candidates clockwise (image y pointing down), starting with the one nearest the image's top-left.
+    /// Which of them is the screen's top-left is decided later by <see cref="Orient"/>.
+    /// </summary>
     internal static MarkerCandidate[] Order(IReadOnlyList<MarkerCandidate> c)
     {
         double cx = c.Average(p => p.Center.X), cy = c.Average(p => p.Center.Y);
@@ -359,6 +372,100 @@ internal static class FiducialDetector
         for (int i = 1; i < 4; i++)
             if (byAngle[i].Center.X + byAngle[i].Center.Y < byAngle[start].Center.X + byAngle[start].Center.Y) start = i;
         return [byAngle[start], byAngle[(start + 1) % 4], byAngle[(start + 2) % 4], byAngle[(start + 3) % 4]];
+    }
+
+    /// <summary>
+    /// Decides which marker of a clockwise quad is the screen's top-left (then TR, BR, BL) from the screen's own
+    /// geometry and content, not from the image axes, so any phone orientation works:
+    /// <list type="number">
+    /// <item>90° ambiguity: the markers are squares on the monitor. A mapping with the wrong 90° assignment swaps the
+    /// screen's width and height and squeezes every marker by ≈ aspect², so the hypothesis whose predicted marker
+    /// outlines match the detected outlines best wins (robust even with strong perspective).</item>
+    /// <item>180° ambiguity: markers and bands are point-symmetric, but the step-code row and the reference squares sit
+    /// below the centre and their mirror images fall into the black probe / empty area above it
+    /// (<see cref="CalibrationLayout.OrientationCuePoints"/>).</item>
+    /// <item>Without that cue (QR / v1 patterns): the rotation whose top edge points most to the image's right.</item>
+    /// </list>
+    /// </summary>
+    internal static MarkerCandidate[]? Orient(MarkerCandidate[] clockwise, float[] lum, int w, int h, CalibrationLayout layout)
+    {
+        var rects = layout.Markers();
+        var src = rects.Select(r => r.Center).ToArray();
+        var err = new double[2];
+        var hs = new Homography?[2];
+        for (int k = 0; k < 2; k++)
+        {
+            var rot = Rotate(clockwise, k);
+            hs[k] = Homography.Fit(src, rot.Select(c => c.Center).ToArray());
+            err[k] = hs[k] is { } hk ? ShapeError(hk, rot, rects) : double.PositiveInfinity;
+        }
+        if (double.IsPositiveInfinity(err[0]) && double.IsPositiveInfinity(err[1])) return null;
+        int k0 = err[0] <= err[1] ? 0 : 1;
+        var a = Rotate(clockwise, k0);
+        var b = Rotate(clockwise, k0 + 2);
+        double cue = OrientationCue(hs[k0]!, lum, w, h, layout);
+        if (cue >= 8) return a;
+        if (cue <= -8) return b;
+        double ax = a[1].Center.X - a[0].Center.X + a[2].Center.X - a[3].Center.X;
+        return ax >= 0 ? a : b;
+    }
+
+    private static MarkerCandidate[] Rotate(MarkerCandidate[] c, int k) => [c[k % 4], c[(k + 1) % 4], c[(k + 2) % 4], c[(k + 3) % 4]];
+
+    /// <summary>Mean distance (in marker sizes) between the predicted and the detected outer corners of the markers.</summary>
+    internal static double ShapeError(Homography H, MarkerCandidate[] chosen, RectD[] rects)
+    {
+        double sum = 0;
+        int n = 0;
+        for (int i = 0; i < 4; i++)
+        {
+            double size = Math.Max(1, chosen[i].Size);
+            foreach (var corner in rects[i].Corners())
+            {
+                var p = H.Map(corner);
+                double best = double.PositiveInfinity;
+                foreach (var q in chosen[i].Quad) best = Math.Min(best, (q - p).Length);
+                if (!double.IsFinite(best)) return double.PositiveInfinity;
+                sum += best / size;
+                n++;
+            }
+        }
+        return sum / n;
+    }
+
+    /// <summary>
+    /// Luma of the always-bright cue points minus luma of their 180°-rotated positions (8-bit units; positive = the
+    /// mapping is the right way up, negative = upside down, ≈ 0 = no cue in this pattern).
+    /// </summary>
+    internal static double OrientationCue(Homography H, float[] lum, int w, int h, CalibrationLayout layout)
+    {
+        var bright = new List<float>(20);
+        var mirror = new List<float>(20);
+        double du = layout.Hx(CalibrationLayout.CodeCellSize * 0.25), dv = CalibrationLayout.CodeCellSize * 0.25;
+        foreach (var c in layout.OrientationCuePoints())
+        {
+            for (int j = -1; j <= 1; j++)
+                for (int i = -1; i <= 1; i++)
+                {
+                    double u = c.X + i * du, v = c.Y + j * dv;
+                    float a = At(u, v), m = At(1 - u, 1 - v);
+                    if (float.IsNaN(a) || float.IsNaN(m)) continue;
+                    bright.Add(a);
+                    mirror.Add(m);
+                }
+        }
+        if (bright.Count < 9) return 0;
+        bright.Sort();
+        mirror.Sort();
+        return bright[bright.Count / 2] - mirror[mirror.Count / 2];
+
+        float At(double u, double v)
+        {
+            var p = H.Map(u, v);
+            if (!double.IsFinite(p.X) || !double.IsFinite(p.Y)) return float.NaN;
+            int x = (int)p.X, y = (int)p.Y;
+            return x < 0 || y < 0 || x >= w || y >= h ? float.NaN : lum[y * w + x];
+        }
     }
 
     private static Homography? FitHomography(MarkerCandidate[] chosen, CalibrationLayout layout)

@@ -148,10 +148,10 @@ internal static class CalibrationAnalyzer
         int oof = sides.Count(s => s.Glow.Status == RegionStatus.OutOfFrame || s.Screen.Status == RegionStatus.OutOfFrame);
         if (glowClip >= 2)
             return (AnalysisFailure.GlowOverexposed,
-                "Glow too bright / overexposed — tap and hold on the screen in your camera to lock focus, then slide the exposure down a bit.");
+                "Glow too bright / overexposed in the photo — step back a little or turn a small light on in the room.");
         if (scrClip >= 2)
             return (AnalysisFailure.ScreenOverexposed,
-                "Screen too bright / overexposed in the photo — tap and hold on the screen in your camera and lower the exposure.");
+                "Screen too bright / overexposed in the photo — step back a little or turn a small light on in the room.");
         if (oof >= 2)
             return (AnalysisFailure.OutOfFrame,
                 "The glow around the screen is cut off — step back so the whole screen and the light around it fit in the photo.");
@@ -168,7 +168,7 @@ internal static class CalibrationAnalyzer
     /// when the status is TooDark): needed to measure the wall with the LEDs off.
     /// </summary>
     internal static RegionMeasurement SampleRegion(RgbImage img, Homography H, Homography inv, RectD rect, Side side, bool glow,
-        bool includeDark = false)
+        bool includeDark = false, int clipLevel = ClipLevel, double minGoodFraction = 0.3)
     {
         var poly = rect.Corners();
         var ppoly = new PointD[4];
@@ -200,7 +200,7 @@ internal static class CalibrationAnalyzer
                 inside++;
                 int o = (y * img.Width + x) * 3;
                 byte r = data[o], g = data[o + 1], b = data[o + 2];
-                if (r >= ClipLevel || g >= ClipLevel || b >= ClipLevel) { clipped++; continue; }
+                if (r >= clipLevel || g >= clipLevel || b >= clipLevel) { clipped++; continue; }
                 if (Math.Max(r, Math.Max(g, b)) < DarkLevel)
                 {
                     dark++;
@@ -216,7 +216,7 @@ internal static class CalibrationAnalyzer
         if (inFrame < 0.5 || inside < 20)
             return new RegionMeasurement(side, glow, ppoly, RegionStatus.OutOfFrame, default, inside, clipFrac, inFrame);
         int bright = includeDark ? samples.Count - dark : samples.Count;
-        if (bright < Math.Max(20, inside * 0.3))
+        if (bright < Math.Max(20, inside * minGoodFraction))
         {
             var st = clipFrac > 0.15 ? RegionStatus.Clipped : RegionStatus.TooDark;
             var darkMean = includeDark && st == RegionStatus.TooDark && samples.Count >= 20 ? TrimmedMean(samples) : default;

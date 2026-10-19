@@ -131,6 +131,11 @@ public class PhoneCalibrationServiceTests
         string html = await page.Content.ReadAsStringAsync();
         Assert.Contains("getUserMedia", html);
         Assert.Contains("capture=\"environment\"", html);
+        Assert.Contains("If Brave shows a certificate warning, tap <b>Show details</b> → <b>Visit this website</b>", html);
+        Assert.Contains("/skipstep", html);
+        Assert.Contains("Skip this step", html);
+        Assert.DoesNotContain("exposureCompensation", html); // no exposure fiddling from the page (not available on iOS)
+        Assert.Contains("videoWidth", html);
         Assert.Contains($"https://127.0.0.1:{svc.TlsPort}", page.Headers.GetValues("Content-Security-Policy").Single());
         Assert.Equal(CalibrationPhase.PhoneConnected, svc.State.Phase);
         Assert.False(svc.Pattern.ShowQr);
@@ -156,8 +161,16 @@ public class PhoneCalibrationServiceTests
         // Live mode over https: frames from the virtual rig, until the camera part is done.
         Assert.Equal(HttpStatusCode.OK, (await https.GetAsync(basePath)).StatusCode);
         var live = await JsonOf(await https.PostAsync(basePath + "/live", null));
-        Assert.Equal("live", live.GetProperty("state").GetProperty("mode").GetString());
+        var liveState = live.GetProperty("state");
+        Assert.Equal("live", liveState.GetProperty("mode").GetString());
+        Assert.Equal("ambient", liveState.GetProperty("step").GetString());
+        Assert.Equal(8, liveState.GetProperty("stepTimeout").GetDouble());
+        Assert.InRange(liveState.GetProperty("screenGain").GetDouble(), ScreenLevels.MinGain, ScreenLevels.MaxGain);
         Assert.Equal(CalibrationPhase.LiveCamera, svc.State.Phase);
+        // "Skip this step" on the phone
+        var skipped = (await JsonOf(await https.PostAsync(basePath + "/skipstep", null))).GetProperty("state");
+        Assert.Equal("white", skipped.GetProperty("step").GetString());
+        Assert.Contains("Room light", Assert.Single(skipped.GetProperty("notes").EnumerateArray()).GetString());
         var session = svc.Session!;
         int n = 0;
         string mode = "live";
@@ -225,16 +238,11 @@ public class PhoneCalibrationServiceTests
         for (int i = 0; i < CalibrationSession.VideoPlan.Length; i++)
         {
             var step = CalibrationSession.VideoPlan[i];
-            int band = step.Kind switch
-            {
-                LoopStepKind.Primary => CalibrationLayout.PrimaryBandRgb(step.Channel),
-                LoopStepKind.Ambient => CalibrationLayout.WhiteBandRgb,
-                _ => CalibrationLayout.GrayBandRgb(step.Level),
-            };
-            var pattern = layout.BuildMeasurePattern(band, CalibrationSession.VideoCodeBase + i, false);
+            var pattern = CalibrationSession.VideoPattern(layout, i);
+            double l = step.Level;
             var drive = step.Kind == LoopStepKind.Primary
-                ? rig.Drive(step.Channel == 0 ? 0.6 : 0, step.Channel == 1 ? 0.6 : 0, step.Channel == 2 ? 0.6 : 0, OverrideColorPath.WhiteBalanceNoMatrix)
-                : rig.Drive(step.Level, step.Level, step.Level, OverrideColorPath.WhiteBalanceNoMatrix);
+                ? rig.Drive(step.Channel == 0 ? l : 0, step.Channel == 1 ? l : 0, step.Channel == 2 ? l : 0, OverrideColorPath.WhiteBalanceNoMatrix)
+                : rig.Drive(l, l, l, OverrideColorPath.WhiteBalanceNoMatrix);
             for (int k = 0; k < 4; k++)
             {
                 var img = new SyntheticPhoto
@@ -318,6 +326,7 @@ public class PhoneCalibrationServiceTests
             Assert.Equal(HttpStatusCode.Forbidden, st.StatusCode);
             Assert.False((await JsonOf(st)).TryGetProperty("state", out _)); // no state leaked
             Assert.Equal(HttpStatusCode.Forbidden, (await c.PostAsync(basePath + "/frame", new ByteArrayContent(new byte[100]))).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await c.PostAsync(basePath + "/skipstep", null)).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await c.PostAsync(basePath + "/eye", new StringContent("{\"action\":\"reset\"}"))).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await c.PostAsync(basePath + "/finish", null)).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await c.PostAsync(basePath + "/cancel", null)).StatusCode);
@@ -401,24 +410,62 @@ public class PhoneCalibrationServiceTests
     [Fact]
     public void Pattern_has_markers_bands_code_and_reference_inside_the_screen()
     {
-        var layout = new CalibrationLayout(16.0 / 9.0);
-        var p = layout.BuildMeasurePattern(CalibrationLayout.WhiteBandRgb, 21, showQr: false);
-        Assert.All(p.Rects, r => Assert.True(r.Left >= 0 && r.Top >= 0 && r.Right <= 1 && r.Bottom <= 1 && r.Left < r.Right && r.Top < r.Bottom));
-        Assert.Equal(4, p.Rects.Count(r => r.Rgb == CalibrationLayout.WhiteBandRgb));
-        Assert.Equal(2, p.Rects.Count(r => r.Rgb == CalibrationLayout.RefPatchRgb));
-        Assert.Equal(21, p.Code);
-        var probe = layout.BlackProbe();
-        // nothing drawn inside the black probe
-        Assert.DoesNotContain(p.Rects, r => r.Left < probe.R && r.Right > probe.L && r.Top < probe.B && r.Bottom > probe.T);
-        var q = layout.BuildMeasurePattern(CalibrationLayout.WhiteBandRgb, 21, showQr: true);
-        Assert.Equal(12, q.Rects.Count);
-        Assert.Equal((q.QrRight - q.QrLeft) * 16.0 / 9.0, q.QrBottom - q.QrTop, 4);
-        var eye = layout.BuildEyePattern(0xFFFFFF);
-        Assert.True(eye.EyeMode);
-        Assert.Equal(4, eye.Rects.Count);
-        Assert.Equal(CalibrationLayout.WhiteBandRgb, CalibrationLayout.GrayBandRgb(0.6));
-        Assert.Equal(0xB30000, CalibrationLayout.PrimaryBandRgb(0));
-        Assert.Equal(0x0000B3, CalibrationLayout.PrimaryBandRgb(2));
+        foreach (double aspect in new[] { 16.0 / 9.0, 4.0 / 3.0, 21.0 / 9.0 })
+        {
+            var layout = new CalibrationLayout(aspect);
+            var lv = ScreenLevels.ForGain(0.3);
+            var p = layout.BuildMeasurePattern(lv, 21, showQr: false);
+            Assert.All(p.Rects, r => Assert.True(r.Left >= 0 && r.Top >= 0 && r.Right <= 1 && r.Bottom <= 1 && r.Left < r.Right && r.Top < r.Bottom));
+            Assert.Equal(lv.RefRgb(0), lv.BandRgb); // the 1× reference square shows exactly the band level
+            Assert.Equal(5, p.Rects.Count(r => r.Rgb == lv.BandRgb));
+            for (int i = 0; i < CalibrationLayout.RefCount; i++)
+                Assert.Single(p.Rects, r => r.Rgb == lv.RefRgb(i) && Math.Abs((r.Left + r.Right) / 2 - layout.RefPatch(i).Center.X) < 1e-6);
+            Assert.Equal(21, p.Code);
+            var probe = layout.BlackProbe();
+            // nothing drawn inside the black probe
+            Assert.DoesNotContain(p.Rects, r => r.Left < probe.R && r.Right > probe.L && r.Top < probe.B && r.Bottom > probe.T);
+            // reference squares, code cells and bands don't overlap each other
+            var boxes = Enumerable.Range(0, CalibrationLayout.RefCount).Select(layout.RefPatch)
+                .Concat(Enumerable.Range(0, StepCode.Cells).Select(layout.CodeCell))
+                .Concat(Enum.GetValues<Side>().Select(layout.Band)).ToList();
+            for (int a = 0; a < boxes.Count; a++)
+                for (int b = a + 1; b < boxes.Count; b++)
+                    Assert.False(boxes[a].L < boxes[b].R && boxes[a].R > boxes[b].L && boxes[a].T < boxes[b].B && boxes[a].B > boxes[b].T, $"{aspect}: {a} overlaps {b}");
+            // the orientation cue's mirror images are dark (black probe / empty area)
+            foreach (var c in layout.OrientationCuePoints())
+                Assert.DoesNotContain(p.Rects, r => r.Rgb != 0 && r.Left <= 1 - c.X && r.Right >= 1 - c.X && r.Top <= 1 - c.Y && r.Bottom >= 1 - c.Y);
+        }
+        {
+            var layout = new CalibrationLayout(16.0 / 9.0);
+            var q = layout.BuildMeasurePattern(CalibrationLayout.WhiteBandRgb, 21, showQr: true);
+            Assert.Equal(12, q.Rects.Count);
+            Assert.Equal((q.QrRight - q.QrLeft) * 16.0 / 9.0, q.QrBottom - q.QrTop, 4);
+            var eye = layout.BuildEyePattern(0xFFFFFF);
+            Assert.True(eye.EyeMode);
+            Assert.Equal(4, eye.Rects.Count);
+            Assert.Equal(CalibrationLayout.WhiteBandRgb, CalibrationLayout.GrayBandRgb(0.6));
+            Assert.Equal(0xB30000, CalibrationLayout.PrimaryBandRgb(0));
+            Assert.Equal(0x0000B3, CalibrationLayout.PrimaryBandRgb(2));
+        }
+    }
+
+    [Fact]
+    public void Screen_levels_follow_the_gain_with_exact_codes()
+    {
+        var lv = ScreenLevels.ForGain(0.2);
+        Assert.Equal(0.2, CalibrationAnalyzer.ToLinear((byte)(lv.BandRgb & 0xFF)), 2);
+        for (int i = 0; i < CalibrationLayout.RefCount; i++)
+            Assert.Equal(0.2 * CalibrationLayout.RefFactors[i], lv.RefLinear(i), 2);
+        Assert.Equal(0.8, CalibrationAnalyzer.ToLinear((byte)(lv.MarkerRgb & 0xFF)), 2); // markers 4× the band
+        Assert.Equal(0xFFFFFF, ScreenLevels.ForGain(0.8).MarkerRgb);                     // capped at white
+        Assert.Equal(ScreenLevels.MarkerFloor, CalibrationAnalyzer.ToLinear((byte)(ScreenLevels.ForGain(0.01).MarkerRgb & 0xFF)), 2);
+        var red = ScreenLevels.ForGain(0.2, 0);
+        Assert.Equal(lv.BandRgb & 0xFF0000, red.BandRgb);
+        Assert.Equal(ScreenLevels.MinGain, ScreenLevels.ForGain(0.0001).Gain);
+        Assert.Equal(ScreenLevels.MaxGain, ScreenLevels.ForGain(7).Gain);
+        Assert.True(ScreenLevels.ForGain(0.2).SameAs(ScreenLevels.ForGain(0.2001)));
+        Assert.False(ScreenLevels.ForGain(0.2).SameAs(ScreenLevels.ForGain(0.25)));
+        Assert.All(ScreenLevels.ForGain(ScreenLevels.MinGain).RefCodes, c => Assert.True(c >= 1));
     }
 
     [Fact]

@@ -25,8 +25,10 @@ internal readonly record struct RectD(double L, double T, double R, double B)
 /// Camera pattern (top to bottom, v in screen heights): fiducial markers in the corners (white square with a black inner
 /// square, 8% of the height, inset 2.5%); reference bands along the middle 70% of each edge (v 0.025–0.075 from the
 /// edge) that the LED glow next to them is compared with; the PC's status text (v ≈ 0.09–0.25); a black probe
-/// (v 0.28–0.56, camera black level); a row with the visual step code and two neutral reference patches (v ≈ 0.64–0.73,
-/// used to normalize camera white balance/exposure between frames); the PC's buttons (v ≈ 0.80–0.87).
+/// (v 0.28–0.56, camera black level); a row with the visual step code and three neutral reference squares at 1×, ½× and
+/// ¼× the band level (v ≈ 0.64–0.73, used to normalize camera white balance/exposure between frames); the PC's buttons
+/// (v ≈ 0.80–0.87). The step-code row below the centre also breaks the pattern's 180° symmetry (orientation cue).
+/// The intensities of all measured elements follow the adaptive screen gain (<see cref="ScreenLevels"/>).
 /// </para>
 /// Eye pattern: wide bands along the full length of every edge so the glow can be compared with the screen edge by eye.
 /// </summary>
@@ -42,13 +44,23 @@ internal sealed class CalibrationLayout
     public const double GlowNear = 0.04, GlowFar = 0.14;    // × screen height beyond the edge
     public const double QrSize = 0.40;          // × screen height
 
-    // Step-code row and reference patches
+    // Step-code row and reference squares
     public const double CodeCellSize = 0.05;    // × screen height
     public const double CodeCellGap = 0.02;     // × screen height
     public const double CodeRowCenter = 0.685;  // v
     public const double RefPatchSize = 0.09;    // × screen height
-    public const double RefPatchOffset = 0.42;  // × screen height, horizontal distance of each patch centre from the middle
-    /// <summary>Neutral reference patch (≈ 0.22 linear): same in every camera frame.</summary>
+    /// <summary>
+    /// Horizontal offsets (× screen height, from the middle) of the neutral reference squares; square i shows
+    /// <see cref="RefFactors"/>[i] × the band level. All of them sit beside the step-code row.
+    /// </summary>
+    public static readonly double[] RefPatchOffsets = [-0.36, 0.36, -0.48];
+    /// <summary>
+    /// Reference square levels relative to the band level (linear). The brightest square that is neither clipped nor
+    /// too dark normalizes the frame; none of them is required individually.
+    /// </summary>
+    public static readonly double[] RefFactors = [1.0, 0.5, 0.25];
+    public static int RefCount => RefFactors.Length;
+    /// <summary>v1 neutral reference level (≈ 0.22 linear).</summary>
     public const int RefPatchRgb = 0x808080;
 
     /// <summary>Eye pattern: band thickness along the edges.</summary>
@@ -136,36 +148,53 @@ internal sealed class CalibrationLayout
         return new(x0, CodeRowCenter - CodeCellSize / 2, x0 + Hx(CodeCellSize), CodeRowCenter + CodeCellSize / 2);
     }
 
-    /// <summary>Neutral reference patch: 0 = left of the code row, 1 = right.</summary>
+    /// <summary>Neutral reference square <paramref name="i"/> (level <see cref="RefFactors"/>[i] × band level).</summary>
     public RectD RefPatch(int i)
     {
-        double cx = 0.5 + (i == 0 ? -1 : 1) * Hx(RefPatchOffset), hw = Hx(RefPatchSize) / 2, hh = RefPatchSize / 2;
+        double cx = 0.5 + Hx(RefPatchOffsets[i]), hw = Hx(RefPatchSize) / 2, hh = RefPatchSize / 2;
         return new(cx - hw, CodeRowCenter - hh, cx + hw, CodeRowCenter + hh);
     }
 
     /// <summary>
-    /// Camera measurement pattern: markers, reference bands in <paramref name="bandRgb"/>, and (unless the QR code is
-    /// shown) the step code + neutral reference patches.
+    /// Screen points that are always bright in a measurement pattern (first step-code cell, reference squares). Their
+    /// 180°-rotated counterparts fall into the black probe or the empty area above it, so comparing both tells the
+    /// detector which way up the screen is (markers and bands alone are point-symmetric).
     /// </summary>
-    public CalibrationPattern BuildMeasurePattern(int bandRgb, int code, bool showQr)
+    public PointD[] OrientationCuePoints()
     {
-        var rects = new List<PatternRect>(24);
+        var pts = new PointD[1 + RefCount];
+        pts[0] = CodeCell(0).Center;
+        for (int i = 0; i < RefCount; i++) pts[1 + i] = RefPatch(i).Center;
+        return pts;
+    }
+
+    /// <summary>
+    /// Camera measurement pattern: markers, reference bands and (unless the QR code is shown) the step code + neutral
+    /// reference squares, at the intensities given by <paramref name="levels"/>.
+    /// </summary>
+    public CalibrationPattern BuildMeasurePattern(ScreenLevels levels, int code, bool showQr)
+    {
+        var rects = new List<PatternRect>(26);
         foreach (var m in Markers())
         {
-            rects.Add(Rect(m, 0xFFFFFF));
+            rects.Add(Rect(m, levels.MarkerRgb));
             rects.Add(Rect(Inner(m), 0x000000));
         }
-        foreach (var s in Enum.GetValues<Side>()) rects.Add(Rect(Band(s), bandRgb));
+        foreach (var s in Enum.GetValues<Side>()) rects.Add(Rect(Band(s), levels.BandRgb));
         if (!showQr)
         {
-            for (int i = 0; i < 2; i++) rects.Add(Rect(RefPatch(i), RefPatchRgb));
+            for (int i = 0; i < RefCount; i++) rects.Add(Rect(RefPatch(i), levels.RefRgb(i)));
             var cells = StepCode.Encode(code);
             for (int i = 0; i < cells.Length; i++)
-                if (cells[i]) rects.Add(Rect(CodeCell(i), 0xFFFFFF));
+                if (cells[i]) rects.Add(Rect(CodeCell(i), levels.MarkerRgb));
         }
         var q = QrArea();
         return new CalibrationPattern(rects, (float)q.L, (float)q.T, (float)q.R, (float)q.B, showQr) { Code = showQr ? null : code };
     }
+
+    /// <summary>Measurement pattern with white markers, the band color <paramref name="bandRgb"/> and the v1 reference level.</summary>
+    public CalibrationPattern BuildMeasurePattern(int bandRgb, int code, bool showQr) =>
+        BuildMeasurePattern(ScreenLevels.Legacy(bandRgb), code, showQr);
 
     /// <summary>Eye pattern: wide bands of <paramref name="rgb"/> along the full length of every edge, black centre.</summary>
     public CalibrationPattern BuildEyePattern(int rgb)
@@ -201,16 +230,61 @@ internal sealed class CalibrationLayout
         return (int)Math.Round(v * 255);
     }
 
-    /// <summary>
-    /// Neutral band for an LED gray level: the screen reference is scaled with the LED level (0.6 ↔ 0xB3) so screen and
-    /// glow keep the same relative exposure in the photo.
-    /// </summary>
+    /// <summary>v1: neutral band for an LED gray level (0.6 ↔ 0xB3).</summary>
     public static int GrayBandRgb(double ledLevel)
     {
         int c = LinearToSrgb8(WhiteBandLinear * ledLevel / CalibrationMath.WhiteLevel);
         return (c << 16) | (c << 8) | c;
     }
 
-    /// <summary>Band showing one monitor primary (0 = R, 1 = G, 2 = B) at the white band level.</summary>
+    /// <summary>v1: band showing one monitor primary (0 = R, 1 = G, 2 = B) at the white band level.</summary>
     public static int PrimaryBandRgb(int channel) => 0xB3 << (8 * (2 - channel));
+}
+
+/// <summary>
+/// Intensities of the screen elements of one camera pattern, derived from the adaptive screen gain — the calibration's
+/// exposure control: a web page cannot steer the phone's auto exposure (iOS has no exposure controls in getUserMedia),
+/// so the screen content is dimmed or brightened until the camera sees it unclipped.
+/// <see cref="Gain"/> is the band's linear level relative to full white; reference square i shows
+/// <see cref="CalibrationLayout.RefFactors"/>[i] × that. Markers and step-code cells are <see cref="MarkerFactor"/>×
+/// brighter but never below <see cref="MarkerFloor"/>: they only need contrast against black and against the glow next
+/// to them, and clipping does not hurt them (on the real phone, fully clipped white markers were still detected).
+/// All values are exact 8-bit sRGB codes; expected linear values are decoded from the codes actually drawn.
+/// </summary>
+internal sealed record ScreenLevels(double Gain, int Channel, int MarkerRgb, int BandRgb, int[] RefCodes)
+{
+    public const double MinGain = 0.01, MaxGain = 1.0;
+    public const double MarkerFactor = 4.0, MarkerFloor = 0.4;
+
+    /// <summary>Levels for a band that is neutral (<paramref name="channel"/> = −1) or one monitor primary (0..2).</summary>
+    public static ScreenLevels ForGain(double gain, int channel = -1)
+    {
+        gain = Math.Clamp(double.IsFinite(gain) ? gain : 0.45, MinGain, MaxGain);
+        int band = CalibrationLayout.LinearToSrgb8(gain);
+        int bandRgb = channel is >= 0 and <= 2 ? band << (8 * (2 - channel)) : Gray(band);
+        int marker = Math.Max(band, CalibrationLayout.LinearToSrgb8(Math.Clamp(gain * MarkerFactor, MarkerFloor, 1)));
+        var refs = new int[CalibrationLayout.RefCount];
+        for (int i = 0; i < refs.Length; i++) refs[i] = Math.Max(1, CalibrationLayout.LinearToSrgb8(gain * CalibrationLayout.RefFactors[i]));
+        return new ScreenLevels(gain, channel, Gray(marker), bandRgb, refs);
+    }
+
+    /// <summary>v1 look: white markers, a fixed band color, reference squares derived from the v1 reference level.</summary>
+    public static ScreenLevels Legacy(int bandRgb)
+    {
+        double refLin = CalibrationAnalyzer.ToLinear(CalibrationLayout.RefPatchRgb & 0xFF);
+        var refs = new int[CalibrationLayout.RefCount];
+        for (int i = 0; i < refs.Length; i++) refs[i] = Math.Max(1, CalibrationLayout.LinearToSrgb8(refLin * CalibrationLayout.RefFactors[i]));
+        return new ScreenLevels(refLin, -1, 0xFFFFFF, bandRgb, refs);
+    }
+
+    public static int Gray(int c) => (c << 16) | (c << 8) | c;
+
+    public int RefRgb(int i) => Gray(RefCodes[i]);
+
+    /// <summary>Displayed linear value of reference square <paramref name="i"/> (neutral).</summary>
+    public double RefLinear(int i) => CalibrationAnalyzer.ToLinear((byte)RefCodes[i]);
+
+    /// <summary>True when both draw exactly the same picture.</summary>
+    public bool SameAs(ScreenLevels? o) =>
+        o is not null && o.MarkerRgb == MarkerRgb && o.BandRgb == BandRgb && o.RefCodes.AsSpan().SequenceEqual(RefCodes);
 }

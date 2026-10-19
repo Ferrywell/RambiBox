@@ -161,6 +161,71 @@ public class LocalCaTests
     }
 
     [Fact]
+    public void Server_certificate_is_persisted_protected_and_reused_until_the_ip_changes_or_it_nears_expiry()
+    {
+        using var dir = new TempDir();
+        var a = new LocalCertificateAuthority(dir.Path, "Box");
+        var ip = IPAddress.Parse("192.168.1.40");
+        string thumb;
+        byte[] pub;
+        using (var leaf = a.GetOrIssueServerCertificate(ip))
+        {
+            Assert.True(leaf.HasPrivateKey);
+            thumb = leaf.Thumbprint;
+            pub = leaf.GetPublicKey();
+        }
+        var keyFile = File.ReadAllBytes(Path.Combine(dir.Path, LocalCertificateAuthority.LeafKeyFileName));
+        Assert.True(File.Exists(Path.Combine(dir.Path, LocalCertificateAuthority.LeafCertFileName)));
+        Assert.DoesNotContain("PRIVATE", System.Text.Encoding.ASCII.GetString(keyFile));
+        Assert.Throws<System.Security.Cryptography.CryptographicException>(() =>
+            System.Security.Cryptography.RSA.Create().ImportPkcs8PrivateKey(keyFile, out _)); // DPAPI-protected, not plain PKCS#8
+
+        // Same IP, next calibration run and after an app restart: the very same certificate + key.
+        using (var again = a.GetOrIssueServerCertificate(ip)) Assert.Equal(thumb, again.Thumbprint);
+        var b = new LocalCertificateAuthority(dir.Path, "Box");
+        using (var restarted = b.GetOrIssueServerCertificate(ip))
+        {
+            Assert.Equal(thumb, restarted.Thumbprint);
+            Assert.Equal(pub, restarted.GetPublicKey());
+            Assert.True(restarted.HasPrivateKey);
+            using var ca = b.Certificate;
+            using var chain = new X509Chain();
+            chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+            chain.ChainPolicy.CustomTrustStore.Add(ca);
+            chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+            Assert.True(chain.Build(restarted));
+        }
+
+        // New LAN address → new certificate (saved in place of the old one).
+        string thumb2;
+        using (var other = b.GetOrIssueServerCertificate(IPAddress.Parse("192.168.1.41")))
+        {
+            Assert.NotEqual(thumb, other.Thumbprint);
+            thumb2 = other.Thumbprint;
+        }
+        using (var same = b.GetOrIssueServerCertificate(IPAddress.Parse("192.168.1.41"))) Assert.Equal(thumb2, same.Thumbprint);
+
+        // Within 30 days of expiry → re-issued.
+        string shortThumb;
+        using (var c = new LocalCertificateAuthority(dir.Path, "Box").GetOrIssueServerCertificate(IPAddress.Parse("10.0.0.9"), TimeSpan.FromDays(20)))
+            shortThumb = c.Thumbprint;
+        using (var renewed = b.GetOrIssueServerCertificate(IPAddress.Parse("10.0.0.9")))
+        {
+            Assert.NotEqual(shortThumb, renewed.Thumbprint);
+            Assert.True(renewed.NotAfter > DateTime.Now.AddDays(300));
+        }
+
+        // A corrupt key file → re-issued, never a crash.
+        File.WriteAllBytes(Path.Combine(dir.Path, LocalCertificateAuthority.LeafKeyFileName), [1, 2, 3]);
+        using (var fixedUp = b.GetOrIssueServerCertificate(IPAddress.Parse("10.0.0.9"))) Assert.True(fixedUp.HasPrivateKey);
+
+        // Reset deletes it together with the CA.
+        b.Reset();
+        Assert.False(File.Exists(Path.Combine(dir.Path, LocalCertificateAuthority.LeafCertFileName)));
+        Assert.False(File.Exists(Path.Combine(dir.Path, LocalCertificateAuthority.LeafKeyFileName)));
+    }
+
+    [Fact]
     public void Mobileconfig_is_a_plist_with_the_ca_der()
     {
         var bytes = Ca.BuildMobileConfig();

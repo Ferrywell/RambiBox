@@ -78,10 +78,23 @@ public sealed class PhoneCalibrationService : IDisposable
         get
         {
             CalibrationSession? s;
-            lock (_gate) s = _session;
-            return s?.Pattern ?? _layout.BuildMeasurePattern(CalibrationLayout.WhiteBandRgb, 0, showQr: true);
+            lock (_gate)
+            {
+                s = _session;
+                // Same object until the layout changes, so the window doesn't redraw for nothing.
+                if (s is null && (_idlePattern is null || !ReferenceEquals(_idleLayout, _layout)))
+                {
+                    _idleLayout = _layout;
+                    _idlePattern = _layout.BuildMeasurePattern(ScreenLevels.ForGain(CalibrationSession.InitialScreenGain), 0, showQr: true);
+                }
+                if (s is null) return _idlePattern!;
+            }
+            return s.Pattern;
         }
     }
+
+    private CalibrationPattern? _idlePattern;
+    private CalibrationLayout? _idleLayout;
 
     /// <summary>True after the user tapped Done on the phone: the UI should close the window and call Stop(keepResult: true).</summary>
     public bool IsFinished { get { lock (_gate) return _finished; } }
@@ -200,7 +213,9 @@ public sealed class PhoneCalibrationService : IDisposable
             string? problem = null;
             try
             {
-                leaf = _ca.IssueServerCertificate(ip);
+                // Persisted + reused while the IP stays the same: a browser's certificate exception (Brave/Chrome
+                // "Visit this website") and TLS session resumption stay valid across calibration runs.
+                leaf = _ca.GetOrIssueServerCertificate(ip);
                 tls = new MiniHttpServer(HandleAsync, Precheck, MaxUploadBytes)
                 {
                     TlsHandshakeFailed = OnTlsHandshakeFailed,
@@ -353,7 +368,9 @@ public sealed class PhoneCalibrationService : IDisposable
                 msg = $"{s.StepTitle} — {s.Note}";
                 detail = $"Step {s.StepIndex + 1} of {s.StepCount}"
                          + (s.ErrorPercent is { } e ? FormattableString.Invariant($"   ·   color difference {e:0.0} %") : "")
-                         + "   ·   " + wbText;
+                         + "   ·   " + wbText
+                         + FormattableString.Invariant($"   ·   screen level {s.ScreenGain * 100:0.#} %")
+                         + (s.LedScale < 0.999 ? FormattableString.Invariant($"   ·   LEDs at {s.LedScale * 100:0} %") : "");
                 break;
             case SessionMode.Video:
                 phase = CalibrationPhase.VideoLoop;
@@ -411,7 +428,7 @@ public sealed class PhoneCalibrationService : IDisposable
         if (n == 1 || n % 10 == 0)
             Log.Info($"Calibration: secure connection from the phone rejected (#{n}): {reason}");
     }
-    private static readonly string[] PostRoutes = ["/live", "/frame", "/video/start", "/video/frames", "/video/done", "/skip", "/eye", "/finish", "/cancel"];
+    private static readonly string[] PostRoutes = ["/live", "/frame", "/skipstep", "/video/start", "/video/frames", "/video/done", "/skip", "/eye", "/finish", "/cancel"];
 
     /// <summary>Returns the route suffix ("" for the page) if the path carries the right token, else null.</summary>
     private string? Route(string path, out bool isPost)
@@ -513,6 +530,10 @@ public sealed class PhoneCalibrationService : IDisposable
                 return Json(200, w => WriteState(w, session));
             case "/frame":
                 return await Task.Run(() => OnFrame(session, req.Body), ct).ConfigureAwait(false);
+            case "/skipstep":
+                session.SkipStep();
+                RaiseChanged();
+                return Json(200, w => WriteState(w, session));
             case "/video/start":
                 session.StartVideoLoop();
                 RaiseChanged();
@@ -861,6 +882,13 @@ public sealed class PhoneCalibrationService : IDisposable
         w.WriteNumber("targetPercent", CalibrationSession.LiveTargetPercent);
         w.WriteString("instruction", s.Note);
         w.WriteString("summary", s.Summary);
+        w.WriteNumber("screenGain", Math.Round(s.ScreenGain, 4));
+        w.WriteNumber("ledScale", Math.Round(s.LedScale, 3));
+        w.WriteNumber("stepSeconds", Math.Round(s.StepSeconds, 1));
+        w.WriteNumber("stepTimeout", Math.Round(s.StepTimeoutSeconds, 1));
+        w.WriteStartArray("notes");
+        foreach (var n in s.Notes) w.WriteStringValue(n);
+        w.WriteEndArray();
         WriteTriple(w, "wb", s.Wb);
         WriteTriple(w, "gamma", s.Gamma);
         w.WriteBoolean("matrixOn", s.MatrixOn);

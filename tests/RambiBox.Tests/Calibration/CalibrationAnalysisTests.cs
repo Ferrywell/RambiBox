@@ -212,8 +212,8 @@ public class CalibrationRejectionTests
         var auto = CalibrationAnalyzer.Analyze(img, layout);
         var manual = CalibrationAnalyzer.Analyze(img, layout, corners);
         Assert.True(auto.Ok && manual.Ok);
-        Assert.Equal(auto.RhoR, manual.RhoR, 2);
-        Assert.Equal(auto.RhoB, manual.RhoB, 2);
+        Assert.InRange(Math.Abs(auto.RhoR - manual.RhoR), 0, 0.005);
+        Assert.InRange(Math.Abs(auto.RhoB - manual.RhoB), 0, 0.005);
     }
 
     [Fact]

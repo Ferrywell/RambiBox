@@ -305,7 +305,8 @@ public class CalibrationSessionTests
         clock.Now += 1;
         var r = s.ProcessLiveFrame(new SyntheticPhoto { Width = 640, Height = 360, ShowScreen = false }.Render());
         Assert.False(r.Used);
-        Assert.Contains(r.Hints, h => h.Contains("corner squares"));
+        Assert.Contains(r.Hints, h => h.Contains("whole screen and some wall"));
+        Assert.DoesNotContain(r.Hints, h => h.Contains("tap", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

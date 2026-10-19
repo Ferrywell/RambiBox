@@ -16,8 +16,9 @@ namespace RambiBox.Core.Calibration;
 /// The CA is created once (RSA 2048 / SHA-256, ~10 years) and its private key is stored DPAPI-protected for the current
 /// Windows user under %AppData%\RambiBox\phone-ca; it never leaves the PC. A critical NameConstraints extension limits
 /// what it can ever vouch for to private/link-local IPv4 addresses and <c>*.local</c> names, so even a stolen key could
-/// not impersonate a public web site on the phone that trusts it. A short-lived leaf certificate (≤ 397 days, Apple's
-/// limit) is issued for the PC's current LAN IP + "&lt;hostname&gt;.local" whenever the calibration starts.
+/// not impersonate a public web site on the phone that trusts it. A leaf certificate (≤ 397 days, Apple's limit) for
+/// the PC's current LAN IP + "&lt;hostname&gt;.local" is saved next to the CA (key DPAPI-protected too) and reused until
+/// the IP changes or it is about to expire.
 /// </para>
 /// Thread-safe.
 /// </summary>
@@ -26,10 +27,15 @@ public sealed class LocalCertificateAuthority
     public const string CaFileName = "ca.cer";
     public const string KeyFileName = "ca.key";
     public const string TrustFileName = "phone-trusted.txt";
+    public const string LeafCertFileName = "server.cer";
+    public const string LeafKeyFileName = "server.key";
     public const int LeafValidityDays = 397;
+    /// <summary>A saved server certificate is replaced when it expires within this many days.</summary>
+    public const int LeafRenewDays = 30;
     public const int CaValidityYears = 10;
 
     private static readonly byte[] DpapiEntropy = "RambiBox phone CA v1"u8.ToArray();
+    private static readonly byte[] LeafEntropy = "RambiBox phone server cert v1"u8.ToArray();
 
     /// <summary>Private IPv4 ranges (+ link-local) the CA may issue for: (network, mask).</summary>
     internal static readonly (byte[] Net, byte[] Mask)[] PermittedIpRanges =
@@ -130,6 +136,7 @@ public sealed class LocalCertificateAuthority
                 try { File.Delete(Path.Combine(_dir, f)); }
                 catch (Exception ex) { Log.Warn($"Phone CA: could not delete {f}: {ex.Message}"); }
             }
+            DeleteLeaf();
             Log.Info("Phone CA reset");
         }
     }
@@ -174,6 +181,7 @@ public sealed class LocalCertificateAuthority
         }
         WriteAtomic(cerPath, _ca.RawData);
         try { File.Delete(Path.Combine(_dir, TrustFileName)); } catch { /* none */ }
+        DeleteLeaf(); // signed by the previous CA
         Log.Info($"Phone CA created: {CaDisplayName}, thumbprint {_ca.Thumbprint}");
         return _ca;
     }
@@ -238,7 +246,7 @@ public sealed class LocalCertificateAuthority
 
     /// <summary>
     /// Issues a TLS server certificate for <paramref name="ip"/> (+ "&lt;host&gt;.local"), valid ≤ 397 days, usable by
-    /// SslStream. The caller owns (and should dispose) it.
+    /// SslStream. The caller owns (and should dispose) it. Not persisted (see <see cref="GetOrIssueServerCertificate"/>).
     /// </summary>
     public X509Certificate2 IssueServerCertificate(IPAddress ip, TimeSpan? validity = null)
     {
@@ -246,7 +254,114 @@ public sealed class LocalCertificateAuthority
         if (ip.IsIPv4MappedToIPv6) ip = ip.MapToIPv4();
         X509Certificate2 ca;
         lock (_gate) ca = LoadOrCreate();
-        using var key = RSA.Create(2048);
+        var (der, key) = IssueLeaf(ca, ip, validity);
+        using (key) return ForSslStream(der, key);
+    }
+
+    /// <summary>
+    /// The persisted TLS server certificate for <paramref name="ip"/>: the leaf certificate and its key (DPAPI-protected
+    /// like the CA key) are kept in the CA directory and reused across calibration runs, so a browser's certificate
+    /// exception (e.g. Brave's "Visit this website") and TLS sessions stay valid instead of a new key on every start.
+    /// A new leaf is issued only when the LAN IP (or the PC name / CA) changed, when it expires within
+    /// <see cref="LeafRenewDays"/> days, or when the files are unreadable. The caller owns (and should dispose) it.
+    /// </summary>
+    public X509Certificate2 GetOrIssueServerCertificate(IPAddress ip, TimeSpan? validity = null)
+    {
+        ArgumentNullException.ThrowIfNull(ip);
+        if (ip.IsIPv4MappedToIPv6) ip = ip.MapToIPv4();
+        lock (_gate)
+        {
+            var ca = LoadOrCreate();
+            if (TryLoadLeaf(ca, ip) is { } reused) return reused;
+            var (der, key) = IssueLeaf(ca, ip, validity);
+            using (key)
+            {
+                try
+                {
+                    System.IO.Directory.CreateDirectory(_dir);
+                    var pkcs8 = key.ExportPkcs8PrivateKey();
+                    try { WriteAtomic(Path.Combine(_dir, LeafKeyFileName), Dpapi.Protect(pkcs8, LeafEntropy)); }
+                    finally { CryptographicOperations.ZeroMemory(pkcs8); }
+                    WriteAtomic(Path.Combine(_dir, LeafCertFileName), der);
+                    Log.Info($"Phone CA: new server certificate for {ip} saved");
+                }
+                catch (Exception ex) { Log.Warn($"Phone CA: could not save the server certificate: {ex.Message}"); }
+                return ForSslStream(der, key);
+            }
+        }
+    }
+
+    /// <summary>The saved leaf, if it is still right for <paramref name="ip"/> and this CA; null otherwise.</summary>
+    private X509Certificate2? TryLoadLeaf(X509Certificate2 ca, IPAddress ip)
+    {
+        string cerPath = Path.Combine(_dir, LeafCertFileName), keyPath = Path.Combine(_dir, LeafKeyFileName);
+        if (!File.Exists(cerPath) || !File.Exists(keyPath)) return null;
+        try
+        {
+            var der = File.ReadAllBytes(cerPath);
+            using var pub = X509CertificateLoader.LoadCertificate(der);
+            string? why = null;
+            var san = pub.Extensions.OfType<X509SubjectAlternativeNameExtension>().FirstOrDefault();
+            var aki = pub.Extensions.OfType<X509AuthorityKeyIdentifierExtension>().FirstOrDefault()?.KeyIdentifier;
+            var ski = ca.Extensions.OfType<X509SubjectKeyIdentifierExtension>().FirstOrDefault()?.SubjectKeyIdentifierBytes;
+            if (pub.Issuer != ca.Subject || aki is null || ski is null || !aki.Value.Span.SequenceEqual(ski.Value.Span)) why = "issued by another CA";
+            else if (san is null || !san.EnumerateIPAddresses().Contains(ip)) why = "the PC's network address changed";
+            else if (!san.EnumerateDnsNames().Contains(DnsHost, StringComparer.OrdinalIgnoreCase)) why = "the PC name changed";
+            else if (pub.NotAfter.ToUniversalTime() < DateTime.UtcNow.AddDays(LeafRenewDays)) why = "it expires soon";
+            else if (pub.NotBefore.ToUniversalTime() > DateTime.UtcNow.AddHours(1)) why = "it is not valid yet";
+            if (why is not null)
+            {
+                Log.Info($"Phone CA: issuing a new server certificate ({why})");
+                return null;
+            }
+            var pkcs8 = Dpapi.Unprotect(File.ReadAllBytes(keyPath), LeafEntropy);
+            try
+            {
+                using var rsa = RSA.Create();
+                rsa.ImportPkcs8PrivateKey(pkcs8, out _);
+                using var certKey = pub.GetRSAPublicKey();
+                if (certKey is null || !certKey.ExportParameters(false).Modulus.AsSpan().SequenceEqual(rsa.ExportParameters(false).Modulus))
+                {
+                    Log.Info("Phone CA: saved server key does not match its certificate; issuing a new one");
+                    return null;
+                }
+                return ForSslStream(der, rsa);
+            }
+            finally { CryptographicOperations.ZeroMemory(pkcs8); }
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Phone CA: saved server certificate unusable ({ex.Message}); issuing a new one");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// SChannel cannot use ephemeral (in-memory) keys; a PKCS#12 round trip gives the key a (temporary) key container
+    /// that is deleted again when the certificate is disposed.
+    /// </summary>
+    private static X509Certificate2 ForSslStream(byte[] der, RSA key)
+    {
+        using var pub = X509CertificateLoader.LoadCertificate(der);
+        using var withKey = pub.CopyWithPrivateKey(key);
+        var pfx = withKey.Export(X509ContentType.Pkcs12);
+        try { return X509CertificateLoader.LoadPkcs12(pfx, null, X509KeyStorageFlags.UserKeySet); }
+        finally { CryptographicOperations.ZeroMemory(pfx); }
+    }
+
+    private void DeleteLeaf()
+    {
+        foreach (var f in new[] { LeafCertFileName, LeafKeyFileName })
+        {
+            try { File.Delete(Path.Combine(_dir, f)); }
+            catch (Exception ex) { Log.Warn($"Phone CA: could not delete {f}: {ex.Message}"); }
+        }
+    }
+
+    /// <summary>Signs a new leaf for <paramref name="ip"/>; returns its DER and its (exportable, in-memory) key.</summary>
+    private (byte[] Der, RSA Key) IssueLeaf(X509Certificate2 ca, IPAddress ip, TimeSpan? validity)
+    {
+        var key = RSA.Create(2048);
         var req = new CertificateRequest(new X500DistinguishedName($"CN={DnsHost}, O=RambiBox"), key,
             HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         req.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
@@ -267,12 +382,7 @@ public sealed class LocalCertificateAuthority
         serial[0] &= 0x7F;
         serial[0] |= 0x01;
         using var signed = req.Create(ca, now.AddHours(-1), notAfter, serial);
-        using var withKey = signed.CopyWithPrivateKey(key);
-        // SChannel cannot use ephemeral (in-memory) keys; a PKCS#12 round trip gives the key a (temporary) key container
-        // that is deleted again when the certificate is disposed.
-        var pfx = withKey.Export(X509ContentType.Pkcs12);
-        try { return X509CertificateLoader.LoadPkcs12(pfx, null, X509KeyStorageFlags.UserKeySet); }
-        finally { CryptographicOperations.ZeroMemory(pfx); }
+        return (signed.RawData, key);
     }
 
     /// <summary>

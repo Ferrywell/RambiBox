@@ -86,6 +86,7 @@
         <li>Come back here. The page continues by itself — or tap the button below.</li>
       </ol>
       <a id="goSecure" class="btn" href="#">I turned on full trust — continue</a>
+      <p class="small" id="braveHint">If Brave shows a certificate warning, tap <b>Show details</b> → <b>Visit this website</b> — the camera works either way.</p>
       <p class="muted" id="waitTrust"><span class="spinner"></span>Waiting for the certificate…</p>
     </div>
 
@@ -107,8 +108,8 @@
       <div id="liveIntro">
         <ol class="steps-small">
           <li>Turn off the room lights if you can.</li>
-          <li>Stand 1.5–2 m in front of the screen so the <b>whole screen and the glow around it</b> are visible.</li>
-          <li>Hold the phone steady. The PC changes colors by itself; just keep pointing at it.</li>
+          <li>Stand 1.5–2 m in front of the screen so the <b>whole screen and some wall around it</b> are visible. Portrait or landscape both work.</li>
+          <li>Hold the phone steady. The PC changes colors and adjusts the screen brightness for your camera by itself; just keep pointing at it.</li>
         </ol>
         <button id="startCam">Start camera</button>
       </div>
@@ -120,6 +121,8 @@
         <div class="bar"><i id="liveBar"></i></div>
         <p class="muted" id="liveNote"></p>
         <ul class="hints" id="liveHints"></ul>
+        <p class="small" id="liveStatus"></p>
+        <button id="skipStep" class="secondary">Skip this step</button>
         <p class="small warn hidden" id="shieldsHint">Brave Shields add noise to camera images. For best accuracy turn off Shields for this page (lion icon in the address bar). Calibration continues anyway.</p>
       </div>
       <div class="camwrap hidden" id="camWrap">
@@ -363,7 +366,7 @@
 
   // ---------------------------------------------------------------- live camera
   var cam = $('cam'), overlay = $('overlay'), grabCanvas = document.createElement('canvas');
-  var lastOverlay = null, lockedWb = false, expComp = null, farbleChecked = false;
+  var lastOverlay = null, lockedWb = false, farbleChecked = false;
 
   $('startCam').addEventListener('click', function () {
     fail('');
@@ -394,10 +397,13 @@
     if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
   }
 
+  // The true frame size (videoWidth/videoHeight are already rotated for a portrait phone; they are re-read for every
+  // frame because they change when the phone turns). In portrait the landscape monitor covers only ~40 % of the frame
+  // width, so portrait frames are sent larger.
   function grab() {
     var w = cam.videoWidth, h = cam.videoHeight;
     if (!w || !h) return Promise.resolve(null);
-    var s = Math.min(1, 1280 / Math.max(w, h));
+    var s = Math.min(1, (h > w ? 1600 : 1280) / Math.max(w, h));
     grabCanvas.width = Math.round(w * s); grabCanvas.height = Math.round(h * s);
     var ctx = grabCanvas.getContext('2d');
     ctx.drawImage(cam, 0, 0, grabCanvas.width, grabCanvas.height);
@@ -433,10 +439,30 @@
     $('liveErr').style.color = showErr ? (s.errorPercent < s.targetPercent ? 'var(--ok)' : s.errorPercent < 3 * s.targetPercent ? 'var(--warn)' : 'var(--bad)') : '';
     var ul = $('liveHints'); ul.textContent = '';
     (r.hints || []).forEach(function (h) { var li = document.createElement('li'); li.textContent = h; ul.appendChild(li); });
+    renderLiveStatus();
     if (r.overlay) { lastOverlay = r.overlay; drawOverlay(); }
     if (r.overlay && r.overlay.corners && r.used) tryLockWhiteBalance();
-    if ((r.hints || []).some(function (h) { return /Overexposed/.test(h); })) lowerExposure();
   }
+
+  // What the PC is doing besides the step: its screen level for the camera, LED dimming, time left in the step.
+  function renderLiveStatus() {
+    var s = state || {}, parts = [];
+    if (typeof s.screenGain === 'number') parts.push('Screen level for the camera: ' + Math.max(1, Math.round(s.screenGain * 100)) + ' %');
+    if (typeof s.ledScale === 'number' && s.ledScale < 0.999) parts.push('LEDs at ' + Math.round(s.ledScale * 100) + ' %');
+    if (s.stepTimeout > 0) parts.push('moves on after ' + Math.max(0, Math.ceil(s.stepTimeout - (s.stepSeconds || 0))) + ' s if it can’t measure');
+    $('liveStatus').textContent = parts.join(' · ');
+  }
+  $('skipStep').addEventListener('click', function () {
+    $('skipStep').disabled = true;
+    post('/skipstep').then(function () {
+      $('skipStep').disabled = false;
+      var n = (state && state.notes) || [];
+      if (n.length) $('liveNote').textContent = n[n.length - 1];
+      $('liveStep').textContent = (state.stepTitle || 'Measuring') + (state.stepCount ? '  (' + (state.stepIndex + 1) + '/' + state.stepCount + ')' : '');
+      renderLiveStatus();
+      if (state.mode !== 'live') { stopCamera(); route(); }
+    }).catch(function (e) { $('skipStep').disabled = false; fail(e.message); });
+  });
 
   function drawOverlay() {
     var o = lastOverlay, w = cam.clientWidth, h = cam.clientHeight;
@@ -467,8 +493,8 @@
 
   function track() { return stream && stream.getVideoTracks ? stream.getVideoTracks()[0] : null; }
   // Each frame is normalized by the neutral reference squares, so auto exposure / white balance may keep running;
-  // locking the white balance (where supported) just removes one source of noise. Exposure stays automatic so the
-  // dark steps are still bright enough.
+  // locking the white balance (where supported) just removes one source of noise. Exposure is NOT touched from here
+  // (iOS offers no exposure control to web pages): the PC adapts the brightness of its pattern to the camera instead.
   function tryLockWhiteBalance() {
     if (lockedWb) return;
     lockedWb = true;
@@ -478,27 +504,6 @@
       if (c.whiteBalanceMode && c.whiteBalanceMode.indexOf('manual') >= 0) t.applyConstraints({ advanced: [{ whiteBalanceMode: 'manual' }] }).catch(function () {});
     } catch (e) { /* optional */ }
   }
-  function lowerExposure() {
-    try {
-      var t = track(); if (!t || !t.getCapabilities) return;
-      var c = t.getCapabilities() || {};
-      if (!c.exposureCompensation) return;
-      var cur = expComp == null ? ((t.getSettings() || {}).exposureCompensation || 0) : expComp;
-      expComp = Math.max(c.exposureCompensation.min, cur - (c.exposureCompensation.step || 0.33));
-      t.applyConstraints({ advanced: [{ exposureCompensation: expComp }] }).catch(function () {});
-    } catch (e) { /* optional */ }
-  }
-  $('camWrap').addEventListener('click', function (ev) {
-    // tap = point of interest for exposure/focus where supported
-    try {
-      var t = track(); if (!t || !t.getCapabilities) return;
-      var r = cam.getBoundingClientRect();
-      var p = { x: (ev.clientX - r.left) / r.width, y: (ev.clientY - r.top) / r.height };
-      t.applyConstraints({ advanced: [{ pointsOfInterest: [p] }] }).catch(function () {});
-      lowerExposure();
-    } catch (e) { /* optional */ }
-  });
-
   // Brave Shields "farbling" adds noise to canvas read-back. Detect it with a known pattern.
   function checkFarbling() {
     if (farbleChecked) return;

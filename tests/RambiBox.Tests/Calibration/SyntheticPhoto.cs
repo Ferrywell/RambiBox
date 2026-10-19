@@ -37,6 +37,28 @@ internal sealed class SyntheticPhoto
 
     public Rgb3 CameraWb { get; init; } = new(0.8, 1.0, 1.3);
     public double Exposure { get; init; } = 1.0;
+    /// <summary>
+    /// Auto exposure like a phone camera: when set, <see cref="Exposure"/> is ignored and the exposure makes the mean
+    /// linear luminance of the whole frame equal to this target (clamped to [<see cref="MinExposure"/>, <see cref="MaxExposure"/>]).
+    /// A dark room therefore pushes the exposure up until the screen's bright elements clip.
+    /// </summary>
+    public double? AutoExposureTarget { get; init; }
+    /// <summary>
+    /// Auto exposure highlight protection: the exposure is also limited so that this fraction of the picture stays
+    /// below clipping (max channel). Small bright things (the screen's markers, bands, squares: a few % of the frame)
+    /// still clip in a dark room, large areas (a saturated LED glow on the wall) do not. Null = mean metering only.
+    /// </summary>
+    public double? HighlightProtect { get; init; }
+    public double MaxExposure { get; init; } = 30;
+    public double MinExposure { get; init; } = 0.05;
+    /// <summary>Exposure actually used by the last <see cref="Render"/>.</summary>
+    public double UsedExposure { get; private set; }
+    /// <summary>Light on the wall with the LEDs off (linear camera space, before camera WB).</summary>
+    public Rgb3 WallLight { get; init; } = new(0.002, 0.002, 0.002);
+    /// <summary>The monitor's black level (backlight leakage), added to every screen pixel.</summary>
+    public double ScreenBlack { get; init; } = 0.0015;
+    /// <summary>Monitor brightness relative to the default (scales everything the screen emits above black).</summary>
+    public double ScreenScale { get; init; } = 1.0;
     /// <summary>Extra camera tone curve exponent applied to linear values (1 = ideal sRGB camera).</summary>
     public double ToneExponent { get; init; } = 1.0;
     public double GlowStrength { get; init; } = 0.5;
@@ -95,11 +117,12 @@ internal sealed class SyntheticPhoto
         // Screen texture (linear light)
         int tw = 960, th = (int)Math.Round(tw / Aspect);
         var tex = new float[tw * th * 3];
-        Array.Fill(tex, 0.0015f); // screen black
+        float blk = (float)ScreenBlack;
+        Array.Fill(tex, blk); // screen black (backlight leakage)
         var mix = ScreenMix;
         foreach (var r in (Pattern ?? layout.BuildPattern(false, DarkStage)).Rects)
         {
-            double lr = Lin(r.Rgb >> 16), lg = Lin(r.Rgb >> 8), lb = Lin(r.Rgb);
+            double lr = Lin(r.Rgb >> 16) * ScreenScale, lg = Lin(r.Rgb >> 8) * ScreenScale, lb = Lin(r.Rgb) * ScreenScale;
             float cr = (float)lr, cg = (float)lg, cb = (float)lb;
             if (mix is not null)
             {
@@ -107,6 +130,7 @@ internal sealed class SyntheticPhoto
                 cg = (float)(mix[3] * lr + mix[4] * lg + mix[5] * lb);
                 cb = (float)(mix[6] * lr + mix[7] * lg + mix[8] * lb);
             }
+            cr += blk; cg += blk; cb += blk;
             int x0 = (int)Math.Round(r.Left * tw), x1 = (int)Math.Round(r.Right * tw);
             int y0 = (int)Math.Round(r.Top * th), y1 = (int)Math.Round(r.Bottom * th);
             for (int y = y0; y < y1; y++)
@@ -116,11 +140,7 @@ internal sealed class SyntheticPhoto
                     tex[o] = cr; tex[o + 1] = cg; tex[o + 2] = cb;
                 }
         }
-        static double Lin(int c)
-        {
-            c &= 0xFF;
-            return c == 0 ? 0.0015 : CalibrationAnalyzer.ToLinear((byte)c);
-        }
+        static double Lin(int c) => CalibrationAnalyzer.ToLinear((byte)(c & 0xFF));
 
         var H = Homography.Fit([new(0, 0), new(1, 0), new(1, 1), new(0, 1)], Corners)!;
         var inv = H.Inverse();
@@ -139,9 +159,10 @@ internal sealed class SyntheticPhoto
         }
         var noise = new double[65536];
         for (int i = 0; i < noise.Length; i++) noise[i] = Gaussian(rng) * NoiseSigma;
+        double exposure = Exposure;
         byte Cam(double linear)
         {
-            double v = Math.Clamp(linear * Exposure, 0, 1) * lutN;
+            double v = Math.Clamp(linear * exposure, 0, 1) * lutN;
             int i0 = (int)v;
             double s = i0 >= lutN ? lut[lutN] : lut[i0] + (lut[i0 + 1] - lut[i0]) * (v - i0);
             return (byte)Math.Clamp(Math.Round(s + noise[rng.Next(65536)]), 0, 255);
@@ -163,8 +184,11 @@ internal sealed class SyntheticPhoto
             }
             double dx = Math.Max(0, Math.Max(-u, u - 1)) * Aspect, dy = Math.Max(0, Math.Max(-v, v - 1));
             double k = GlowStrength * Math.Exp(-Math.Sqrt(dx * dx + dy * dy) / glowFalloff);
-            r += 0.002 + glow.R * k; g += 0.002 + glow.G * k; b += 0.002 + glow.B * k;
+            r += WallLight.R + glow.R * k; g += WallLight.G + glow.G * k; b += WallLight.B + glow.B * k;
         }
+        // Pass 1: the scene in linear camera space (after the camera's white balance), pass 2: exposure + camera response.
+        var scene = new float[Width * Height * 3];
+        double lumSum = 0;
         for (int y = 0; y < Height; y++)
         {
             for (int x = 0; x < Width; x++)
@@ -191,11 +215,27 @@ internal sealed class SyntheticPhoto
                     r /= 4; g /= 4; b /= 4;
                 }
                 int o = (y * Width + x) * 3;
-                d[o] = Cam(r * CameraWb.R);
-                d[o + 1] = Cam(g * CameraWb.G);
-                d[o + 2] = Cam(b * CameraWb.B);
+                scene[o] = (float)(r * CameraWb.R);
+                scene[o + 1] = (float)(g * CameraWb.G);
+                scene[o + 2] = (float)(b * CameraWb.B);
+                lumSum += 0.2126 * scene[o] + 0.7152 * scene[o + 1] + 0.0722 * scene[o + 2];
             }
         }
+        if (AutoExposureTarget is { } target)
+        {
+            double e = target / Math.Max(1e-9, lumSum / (Width * Height));
+            if (HighlightProtect is { } q)
+            {
+                var maxes = new List<float>(scene.Length / 3 / 5 + 1);
+                for (int o = 0; o < scene.Length; o += 3 * 5) maxes.Add(Math.Max(scene[o], Math.Max(scene[o + 1], scene[o + 2])));
+                maxes.Sort();
+                double p = maxes[Math.Clamp((int)(maxes.Count * q), 0, maxes.Count - 1)];
+                if (p > 0) e = Math.Min(e, 0.95 / p);
+            }
+            exposure = Math.Clamp(e, MinExposure, MaxExposure);
+        }
+        UsedExposure = exposure;
+        for (int i = 0; i < scene.Length; i++) d[i] = Cam(scene[i]);
         return img;
     }
 

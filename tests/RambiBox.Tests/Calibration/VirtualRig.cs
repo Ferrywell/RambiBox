@@ -30,6 +30,17 @@ internal sealed class VirtualRig : ICalibrationTarget
     public double[] ScreenMix = [0.86, 0.12, 0.02, 0.07, 0.88, 0.05, 0.02, 0.09, 0.89];
     public double CameraWbJitter = 0.08;
     public int Width = 960, Height = 540;
+    /// <summary>Phone pose: roll (degrees, any value — portrait/upside down), screen width as a fraction of the frame width.</summary>
+    public double Roll = 1, WidthFraction = 0.6;
+    /// <summary>Phone-like auto exposure (mean frame luminance → target, capped at <see cref="MaxExposure"/>); null = fixed exposure.</summary>
+    public double? AutoExposureTarget;
+    public double? HighlightProtect;
+    public double MaxExposure = 30;
+    /// <summary>Room light on the wall (LEDs off), camera space.</summary>
+    public Rgb3 WallLight = new(0.002, 0.002, 0.002);
+    public double GlowStrength = 0.5;
+    /// <summary>Exposure of the last shot.</summary>
+    public double LastExposure;
 
     public int Applies;
 
@@ -78,17 +89,25 @@ internal sealed class VirtualRig : ICalibrationTarget
         var drive = Drive(r, g, b, path);
         var rng = new Random(seed);
         double J() => 1 + (rng.NextDouble() * 2 - 1) * CameraWbJitter;
-        return new SyntheticPhoto
+        var photo = new SyntheticPhoto
         {
             Width = Width, Height = Height, Aspect = Aspect,
-            Corners = SyntheticPhoto.Pose(Width, Height, Aspect, yaw, pitch, 1, 0.6),
+            Corners = SyntheticPhoto.Pose(Width, Height, Aspect, yaw, pitch, Roll, WidthFraction),
             Pattern = s.Pattern,
             GlowCamera = GlowCamera(drive),
+            GlowStrength = GlowStrength,
+            WallLight = WallLight,
             ScreenMix = ScreenMix,
             CameraWb = new Rgb3(0.85 * J(), 1.0, 1.2 * J()),
             Exposure = 0.9 * J(),
+            AutoExposureTarget = AutoExposureTarget,
+            HighlightProtect = HighlightProtect,
+            MaxExposure = MaxExposure,
             Seed = seed,
-        }.Render();
+        };
+        var img = photo.Render();
+        LastExposure = photo.UsedExposure;
+        return img;
     }
 
     /// <summary>True chroma error (percent) of the glow vs a neutral screen gray at an LED level (LedCorrection path).</summary>

@@ -87,9 +87,20 @@ public partial class CalibrationWindow : Window
         Render();
     }
 
+    private static readonly SolidColorBrush StatusBrush = Frozen(Color.FromRgb(0xC8, 0xC8, 0xC8));
+    private static readonly SolidColorBrush FailedBrush = Frozen(Color.FromRgb(0xFF, 0x99, 0xA4));
+
+    private static SolidColorBrush Frozen(Color c)
+    {
+        var b = new SolidColorBrush(c);
+        b.Freeze();
+        return b;
+    }
+
     private void OnServiceChanged()
     {
-        // any thread → coalesce onto the UI thread
+        // any thread → coalesce onto the UI thread (the screen-gain loop may change the pattern with every analyzed
+        // frame, ~2×/s; at most one render is queued at a time and the surface only redraws for a new pattern object)
         if (Interlocked.Exchange(ref _updateQueued, 1) == 1) return;
         Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
         {
@@ -186,7 +197,7 @@ public partial class CalibrationWindow : Window
         HintText.Visibility = state.Phase is CalibrationPhase.WaitingForPhone or CalibrationPhase.Failed
             ? Visibility.Visible : Visibility.Collapsed;
         bool failed = state.Phase == CalibrationPhase.Failed;
-        StatusText.Foreground = failed ? new SolidColorBrush(Color.FromRgb(0xFF, 0x99, 0xA4)) : new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8));
+        StatusText.Foreground = failed ? FailedBrush : StatusBrush;
         DoneButton.Visibility = failed ? Visibility.Collapsed : Visibility.Visible;
         CancelButton.Content = failed ? "Close" : "Cancel";
     }
