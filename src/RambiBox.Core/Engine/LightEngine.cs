@@ -103,7 +103,7 @@ public sealed class LightEngine : IDisposable
         float[] raw = Array.Empty<float>(), target = Array.Empty<float>(), output = Array.Empty<float>();
         byte[] frame = Array.Empty<byte>(), lastSent = Array.Empty<byte>();
         double lastIter = 0, lastSendTime = -10;
-        bool haveCapture = false;
+        bool haveCapture = false, lastIterSent = true;
         int ledCount = -1, offset = 0;
         LightMode lastMode = (LightMode)(-1);
 
@@ -177,6 +177,15 @@ public sealed class LightEngine : IDisposable
 
             // ---- Pace: wait for the link to be free (so the capture below is as fresh as possible).
             if (!_device.WaitForSlot(200)) continue;
+            if (!lastIterSent && lastIter > 0)
+            {
+                // Previous iteration produced no new LED data (e.g. the screen changes only away from the edges,
+                // or the picture is static): don't re-capture at the monitor's refresh rate (144 Hz),
+                // the LEDs can only show ~33 updates/s anyway. Saves most of the CPU in that situation.
+                double linkInterval = 1.0 / Math.Max(1, _device.MaxFrameRate);
+                double wait = lastIter + linkInterval - clock.Elapsed.TotalSeconds;
+                if (wait > 0.001) _wake.WaitOne(TimeSpan.FromSeconds(wait));
+            }
             if (s.Capture.MaxFps > 0)
             {
                 double minInterval = 1.0 / s.Capture.MaxFps;
@@ -257,6 +266,7 @@ public sealed class LightEngine : IDisposable
             procMs = procMs == 0 ? pms : procMs * 0.9 + pms * 0.1;
 
             bool changed = !frame.AsSpan().SequenceEqual(lastSent);
+            lastIterSent = changed;
             if (changed || now - lastSendTime > 1.0) // keep-alive so firmware timeouts never blank the strip
             {
                 _device.Submit(frame);
