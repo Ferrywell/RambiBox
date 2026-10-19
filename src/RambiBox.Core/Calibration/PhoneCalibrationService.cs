@@ -41,6 +41,7 @@ public sealed class PhoneCalibrationService : IDisposable
     private MiniHttpServer? _server;
     private Timer? _autoStop;
     private string _token = "";
+    private IPAddress? _client; // the phone this session is bound to (see Precheck)
     private Uri? _url;
     private CalibrationLayout _layout = new(16.0 / 9.0);
     private CalibrationPhase _phase = CalibrationPhase.WaitingForPhone;
@@ -160,7 +161,10 @@ public sealed class PhoneCalibrationService : IDisposable
                 Log.Warn("Calibration: no LAN address found");
                 goto failed;
             }
-            var server = new MiniHttpServer(HandleAsync, Accepts, MaxPhotoBytes);
+            var server = new MiniHttpServer(HandleAsync, Precheck, MaxPhotoBytes)
+            {
+                ClientAddress = ClientAddressOverride ?? (ep => ep.Address),
+            };
             if (!server.Start(FirstPort, LastPort))
             {
                 SetPhase(CalibrationPhase.Failed, $"Could not open a network port ({FirstPort}–{LastPort} are all in use).");
@@ -169,6 +173,7 @@ public sealed class PhoneCalibrationService : IDisposable
             }
             _server = server;
             _token = NewToken();
+            _client = null;
             _url = new Uri($"http://{ip}:{server.Port}/c/{_token}");
             SetPhase(CalibrationPhase.WaitingForPhone, "Scan the QR code with your phone's camera (phone on the same Wi-Fi).");
             int session = _session;
@@ -223,6 +228,8 @@ public sealed class PhoneCalibrationService : IDisposable
     /// <summary>Address to advertise in the URL (tests substitute loopback).</summary>
     internal Func<IPAddress?> AddressProvider { get; set; } = LanAddress.Pick;
     internal TimeSpan AutoStopAfter { get; set; } = TimeSpan.FromMinutes(30);
+    /// <summary>Maps a connection to its client IP (tests simulate other LAN hosts over loopback). Read by Start.</summary>
+    internal Func<IPEndPoint, IPAddress>? ClientAddressOverride { get; set; }
     internal int Port { get { lock (_gate) return _server?.Port ?? 0; } }
     internal string Token { get { lock (_gate) return _token; } }
     internal CalibrationLayout Layout { get { lock (_gate) return _layout; } }
@@ -289,16 +296,61 @@ public sealed class PhoneCalibrationService : IDisposable
         return Array.IndexOf(Routes, suffix) >= 0 ? suffix : null;
     }
 
-    private bool Accepts(string method, string path)
+    // Client binding. The page and API are plain HTTP on the LAN, so on an open Wi-Fi a sniffer could learn the token
+    // from the phone's first request. The session is therefore bound to the IP address that first loaded the page
+    // (GET /c/{token}); afterwards every route - page reloads, /state and the POST endpoints - answers only that IP
+    // (403 for anyone else; /state and POSTs are also refused before any page load). The token travels only after the
+    // phone scanned the QR code, so a sniffer cannot load the page before the phone does. Loopback is just another IP.
+    // If the phone's address changes mid-session (rare: Wi-Fi roaming to another subnet / DHCP renewal), the phone is
+    // locked out too; the user simply restarts calibration on the PC, which issues a new token and a fresh binding.
+
+    /// <summary>Runs before the request body is read: unknown routes → 404, foreign clients → 403, otherwise null.</summary>
+    private MiniHttpResponse? Precheck(string method, string path, IPAddress remote)
     {
         var r = Route(path);
-        if (r is null) return false;
-        return r is "" or "/state" ? method is "GET" or "HEAD" : method == "POST";
+        if (r is null) return MiniHttpResponse.Text(404, "Not found");
+        bool methodOk = r is "" or "/state" ? method is "GET" or "HEAD" : method == "POST";
+        if (!methodOk) return MiniHttpResponse.Text(404, "Not found");
+        IPAddress? bound;
+        lock (_gate) bound = _client;
+        if (r == "") return bound is null || bound.Equals(remote) ? null : ForbiddenPage();
+        return bound is not null && bound.Equals(remote) ? null : Forbidden();
     }
+
+    /// <summary>Binds the session to <paramref name="remote"/> if unbound; true if it is (now) bound to it.</summary>
+    private bool TryBind(IPAddress remote)
+    {
+        lock (_gate)
+        {
+            if (_client is not null) return _client.Equals(remote);
+            _client = remote;
+        }
+        Log.Info("Calibration: session bound to the device that opened the page");
+        return true;
+    }
+
+    private bool IsBoundTo(IPAddress remote)
+    {
+        lock (_gate) return _client is not null && _client.Equals(remote);
+    }
+
+    private const string ForbiddenMessage =
+        "This calibration session is already in use by another device. To use this phone, start the calibration again on the PC.";
+
+    private static MiniHttpResponse Forbidden() => Json(403, w =>
+    {
+        w.WriteBoolean("ok", false);
+        w.WriteString("message", ForbiddenMessage);
+    });
+
+    private static MiniHttpResponse ForbiddenPage() => MiniHttpResponse.Text(403, ForbiddenMessage);
 
     private async Task<MiniHttpResponse> HandleAsync(MiniHttpRequest req, CancellationToken ct)
     {
         var route = Route(req.Path);
+        // Precheck ran before the body was read; re-check here because two hosts may race for the first page load.
+        if (route == "" ? !TryBind(req.Remote) : route is not null && !IsBoundTo(req.Remote))
+            return route == "" ? ForbiddenPage() : Forbidden();
         switch (route)
         {
             case "":

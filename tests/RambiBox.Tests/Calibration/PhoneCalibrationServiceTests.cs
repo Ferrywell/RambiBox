@@ -158,6 +158,72 @@ public class PhoneCalibrationServiceTests
     }
 
     [Fact]
+    public async Task Session_is_bound_to_the_client_that_loaded_the_page()
+    {
+        using var engine = new LightEngine(new FakeSampler(), new FakeDevice());
+        var applied = new List<(double, double, double)>();
+        var phone = IPAddress.Parse("192.168.1.50");
+        var sniffer = IPAddress.Parse("192.168.1.66");
+        IPAddress current = sniffer; // client IP the server sees for the next connection
+        using var svc = new PhoneCalibrationService(engine, () => (1, 1, 1), (r, g, b) => { lock (applied) applied.Add((r, g, b)); },
+            (_, _, _) => { }, () => (1, 1, 1))
+        {
+            AddressProvider = () => IPAddress.Loopback,
+            ClientAddressOverride = _ => Volatile.Read(ref current),
+        };
+        Assert.True(svc.Start());
+        using var http = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{svc.Port}"), Timeout = TimeSpan.FromSeconds(10) };
+        string basePath = svc.Url!.AbsolutePath;
+
+        async Task<HttpStatusCode> Post(string route, byte[]? body = null)
+            => (await http.PostAsync(basePath + route, body is null ? null : new ByteArrayContent(body))).StatusCode;
+
+        // Before any page load the API is closed to everyone (the token alone is not enough).
+        Assert.Equal(HttpStatusCode.Forbidden, (await http.GetAsync(basePath + "/state")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, await Post("/finish"));
+        Assert.False(svc.IsFinished);
+
+        // The phone loads the page first → session bound to its IP.
+        Volatile.Write(ref current, phone);
+        Assert.Equal(HttpStatusCode.OK, (await http.GetAsync(basePath)).StatusCode);
+        Assert.Equal(CalibrationPhase.WaitingForPhoto, svc.State.Phase);
+
+        // A sniffer that learned the token: page, state and every POST endpoint are refused, nothing changes.
+        Volatile.Write(ref current, sniffer);
+        Assert.Equal(HttpStatusCode.Forbidden, (await http.GetAsync(basePath)).StatusCode);
+        var st = await http.GetAsync(basePath + "/state");
+        Assert.Equal(HttpStatusCode.Forbidden, st.StatusCode);
+        using (var doc = JsonDocument.Parse(await st.Content.ReadAsStringAsync()))
+        {
+            Assert.False(doc.RootElement.GetProperty("ok").GetBoolean());
+            Assert.False(doc.RootElement.TryGetProperty("whiteR", out _)); // no state leaked
+        }
+        Assert.Equal(HttpStatusCode.Forbidden, await Post("/photo", new byte[100])); // refused before the body is read
+        Assert.Equal(HttpStatusCode.Forbidden, await Post("/corners", Encoding.UTF8.GetBytes("{\"corners\":[[0,0],[1,0],[1,1],[0,1]]}")));
+        Assert.Equal(HttpStatusCode.Forbidden, await Post("/dark"));
+        Assert.Equal(HttpStatusCode.Forbidden, await Post("/finish"));
+        Assert.Empty(applied);
+        Assert.False(svc.IsDarkStage);
+        Assert.False(svc.IsFinished);
+        Assert.Equal(CalibrationPhase.WaitingForPhoto, svc.State.Phase);
+
+        // The bound phone keeps working (page reload included).
+        Volatile.Write(ref current, phone);
+        Assert.Equal(HttpStatusCode.OK, (await http.GetAsync(basePath)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await http.GetAsync(basePath + "/state")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, await Post("/finish"));
+        Assert.True(svc.IsFinished);
+
+        // Restarting calibration issues a new token and a fresh binding (e.g. the phone's IP changed).
+        svc.Stop(keepResult: true);
+        Volatile.Write(ref current, sniffer);
+        Assert.True(svc.Start());
+        using var http2 = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{svc.Port}"), Timeout = TimeSpan.FromSeconds(10) };
+        Assert.Equal(HttpStatusCode.OK, (await http2.GetAsync(svc.Url!.AbsolutePath)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await http2.GetAsync(svc.Url!.AbsolutePath + "/state")).StatusCode);
+    }
+
+    [Fact]
     public void Start_fails_cleanly_without_network()
     {
         using var engine = new LightEngine(new FakeSampler(), new FakeDevice());
