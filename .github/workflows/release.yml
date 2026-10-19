@@ -56,12 +56,40 @@ jobs:
           "SHA-256: $hash"
           'SHA-256 of RambiBox.exe: ' + $hash >> $env:GITHUB_STEP_SUMMARY
 
+      # Update signature: ECDSA P-256 over SHA-256 of the exe (DER signature). The app's updater only installs an
+      # update whose signature verifies against the public key compiled into the app (src/RambiBox.App/Updates).
+      # The private key lives only in the RELEASE_SIGNING_KEY secret (and offline with the maintainer).
+      - name: Sign for the in-app updater
+        shell: pwsh
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:RELEASE_SIGNING_KEY)) { throw "RELEASE_SIGNING_KEY secret is missing" }
+          $key = Join-Path $env:RUNNER_TEMP "signing-key.pem"
+          [IO.File]::WriteAllText($key, $env:RELEASE_SIGNING_KEY)
+          try {
+            openssl dgst -sha256 -sign $key -out dist/RambiBox.exe.sig dist/RambiBox.exe
+            if ($LASTEXITCODE -ne 0) { throw "openssl sign failed" }
+            openssl ec -in $key -pubout -out (Join-Path $env:RUNNER_TEMP "pub.pem") 2>$null
+            openssl dgst -sha256 -verify (Join-Path $env:RUNNER_TEMP "pub.pem") -signature dist/RambiBox.exe.sig dist/RambiBox.exe
+            if ($LASTEXITCODE -ne 0) { throw "signature self-check failed" }
+          } finally { Remove-Item $key -Force -ErrorAction SilentlyContinue }
+
+      # Optional hand-written notes: .github/release-notes/<tag>.md (auto-generated notes are appended).
+      - name: Release notes
+        shell: pwsh
+        run: |
+          $f = ".github/release-notes/${{ github.ref_name }}.md"
+          if (Test-Path $f) { Copy-Item $f dist/notes.md } else { Set-Content dist/notes.md "" }
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           name: RambiBox ${{ steps.version.outputs.version }}
+          body_path: dist/notes.md
           generate_release_notes: true
           prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
           files: |
             dist/RambiBox.exe
             dist/RambiBox.exe.sha256
+            dist/RambiBox.exe.sig
