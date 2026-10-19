@@ -128,15 +128,17 @@ public static class AmbiBoxImporter
             var z = zs[i];
             float cx = (z.Left + z.Right) / 2, cy = (z.Top + z.Bottom) / 2;
             // Zone shapes are ambiguous (AmbiBox makes all zones the same normalized size), so classify by the
-            // direction the strip travels: towards the next zone, or from the previous one at corners/duplicates.
+            // direction the strip travels. At a corner one neighbour is (almost) on top of this zone, so use
+            // whichever neighbour is further away: that step runs along this zone's own side.
             (float dx, float dy) Delta(int j)
             {
                 if (j < 0 || j >= zs.Count) return (0, 0);
                 var o = zs[j];
                 return (MathF.Abs((o.Left + o.Right) / 2 - cx), MathF.Abs((o.Top + o.Bottom) / 2 - cy));
             }
-            var (dx, dy) = Delta(i + 1);
-            if (dx + dy < 1e-4f) (dx, dy) = Delta(i - 1);
+            var next = Delta(i + 1);
+            var prev = Delta(i - 1);
+            var (dx, dy) = next.dx + next.dy >= prev.dx + prev.dy ? next : prev;
             bool horizontal = dx + dy < 1e-4f ? z.Width >= z.Height : dx >= dy;
             if (horizontal)
             {

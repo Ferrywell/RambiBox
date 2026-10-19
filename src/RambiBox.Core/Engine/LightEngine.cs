@@ -109,7 +109,7 @@ public sealed class LightEngine : IDisposable
 
         // Stats (exponential moving averages)
         double outFps = 0, capFps = 0, capMs = 0, procMs = 0;
-        double lastStatsPublish = 0;
+        double lastStatsPublish = -1;
         int sentCount = 0, capCount = 0;
         double statWindowStart = 0;
 
@@ -159,8 +159,7 @@ public sealed class LightEngine : IDisposable
                 lock (_previewLock) _preview = new byte[n * 3];
                 _proc.Reset();
                 haveCapture = false;
-                PublishStats(0, 0, capMs, procMs, paused, ov, force: now - lastStatsPublish > 0.5);
-                lastStatsPublish = now;
+                if (now - lastStatsPublish > 0.5) { PublishStats(0, 0, capMs, procMs, paused, ov, force: true); lastStatsPublish = now; }
                 _wake.WaitOne(250);
                 lastIter = clock.Elapsed.TotalSeconds;
                 continue;
@@ -169,8 +168,7 @@ public sealed class LightEngine : IDisposable
             // ---- Not connected: don't waste CPU on capturing.
             if (_device.Status != DeviceStatus.Connected)
             {
-                PublishStats(0, 0, capMs, procMs, paused, ov, force: now - lastStatsPublish > 0.5);
-                lastStatsPublish = now;
+                if (now - lastStatsPublish > 0.5) { PublishStats(0, 0, capMs, procMs, paused, ov, force: true); lastStatsPublish = now; }
                 _wake.WaitOne(250);
                 lastSent = Array.Empty<byte>(); // resend on reconnect
                 lastIter = clock.Elapsed.TotalSeconds;
