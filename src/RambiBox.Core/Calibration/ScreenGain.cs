@@ -13,7 +13,7 @@ internal readonly record struct GainDecision(GainAction Action, double Gain, dou
 /// (<see cref="ScreenLevels.Gain"/>) until the camera sees the bands inside a comfortable window.
 /// <para>
 /// Window (camera linear, max channel of the band): <see cref="Low"/> (sRGB ≈ 100/255, ~40 % of the range) to
-/// <see cref="High"/> (≈ 235/255). Outside it the gain is multiplied towards <see cref="Target"/> (≈ 190/255) — the
+/// <see cref="High"/> (≈ 250/255). Outside it the gain is multiplied towards <see cref="Target"/> (≈ 190/255) — the
 /// factor is computed from the measured level, or from the dimmer reference squares when the bands are clipped (a
 /// fixed ×0.4 when everything is clipped). The window spans ~6.5× in linear light, which is the hysteresis: a
 /// correction always lands well inside it, so the loop does not oscillate. Gain limits: <see cref="ScreenLevels.MinGain"/>
@@ -23,7 +23,10 @@ internal readonly record struct GainDecision(GainAction Action, double Gain, dou
 internal static class ScreenGainControl
 {
     public static readonly double Low = CalibrationAnalyzer.ToLinear(100);
-    public static readonly double High = CalibrationAnalyzer.ToLinear(235);
+    // Bright but unclipped bands are fine to measure: lowering the gain only because they are "nearly" clipped made the
+    // phone's auto exposure chase the screen (a real iPhone raised its exposure as the red/blue bands dimmed), so the
+    // primary steps never got a stable frame. Real clipping is handled separately via ClipFraction.
+    public static readonly double High = CalibrationAnalyzer.ToLinear(250);
     public static readonly double Target = CalibrationAnalyzer.ToLinear(190);
     /// <summary>A band with more clipped pixels than this counts as clipped (clipped pixels bias its color).</summary>
     public const double ClipFraction = 0.02;
