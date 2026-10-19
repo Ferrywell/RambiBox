@@ -13,8 +13,10 @@ public static class Log
     private static readonly Thread Writer;
     private const long MaxBytes = 1_000_000;
 
-    public static string Directory { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RambiBox", "logs");
+    /// <summary>%LocalAppData%\RambiBox\logs, or RAMBIBOX_LOG_DIR when set (tests use that to keep the real log clean).</summary>
+    public static string Directory { get; } =
+        Environment.GetEnvironmentVariable("RAMBIBOX_LOG_DIR") is { Length: > 0 } dir ? dir : Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RambiBox", "logs");
     public static string FilePath { get; } = Path.Combine(Directory, "rambibox.log");
 
     /// <summary>Raised for every log line (UI may show the most recent ones). Invoked on the caller's thread.</summary>

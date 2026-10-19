@@ -188,7 +188,8 @@ public sealed class TrayIconService : IDisposable
                 using (info.Stream) icon = new System.Drawing.Icon(info.Stream, size, size);
                 _iconCache[key] = icon;
             }
-            _icon.Icon = icon;
+            // TaskbarIcon disposes the icon it replaces, so never hand it the cached instance itself.
+            _icon.Icon = (System.Drawing.Icon)icon.Clone();
             _currentIconKey = key;
         }
         catch (Exception ex)
