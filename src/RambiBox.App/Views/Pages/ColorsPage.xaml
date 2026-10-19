@@ -1,0 +1,92 @@
+<UserControl x:Class="RambiBox.App.Views.Pages.ColorsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:RambiBox.App.Controls"
+             IsTabStop="False">
+    <StackPanel>
+        <TextBlock Text="Colors" Style="{StaticResource PageTitle}" />
+        <TextBlock Text="Fine-tune how the screen colors are turned into LED colors. Changes are applied instantly."
+                   Style="{StaticResource PageSubtitle}" />
+
+        <TextBlock Text="Picture" Style="{StaticResource SectionHeader}" Margin="2,0,0,8" />
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <c:SettingSlider x:Name="BrightnessSlider" Header="Brightness" Description="Overall brightness of the LEDs."
+                                 Minimum="0" Maximum="100" Step="1" ValueFormat="{}{0:0}%" Value="{Binding S.Brightness}" />
+                <Border Style="{StaticResource Divider}" />
+                <c:SettingSlider x:Name="SaturationSlider" Header="Saturation" Description="Makes the LED colors more vivid. 100% shows the screen colors as they are."
+                                 Minimum="0" Maximum="300" Step="1" LargeChange="10" ValueFormat="{}{0:0}%" Value="{Binding S.Saturation}" />
+                <Border Style="{StaticResource Divider}" />
+                <c:SettingSlider x:Name="GammaSlider" Header="Gamma" Description="Higher values make dark and medium tones dimmer on the LEDs, for more contrast."
+                                 Minimum="0.5" Maximum="3" Step="0.05" SmallChange="0.05" LargeChange="0.25" ValueFormat="{}{0:0.00}"
+                                 Value="{Binding S.Gamma}" />
+                <Border Style="{StaticResource Divider}" />
+                <c:SettingSlider x:Name="HueSlider" Header="Hue shift" Description="Rotates all colors around the color wheel. Normally 0°."
+                                 Minimum="-180" Maximum="180" Step="1" LargeChange="15" Value="{Binding S.HueShift}" />
+            </StackPanel>
+        </Border>
+
+        <TextBlock Text="Motion and dark scenes" Style="{StaticResource SectionHeader}" />
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <c:SettingSlider x:Name="SmoothingSlider" Header="Smoothing" Description="How gently the LEDs follow changes on screen. Smoother looks calmer, responsive reacts faster."
+                                 Minimum="0" Maximum="1000" Step="10" SmallChange="10" LargeChange="100" IsDirectionReversed="True"
+                                 LeftLabel="Smooth" RightLabel="Responsive" ValueFormat="{}{0:0} ms" Value="{Binding S.SmoothingMs}" />
+                <Border Style="{StaticResource Divider}" />
+                <c:SettingSlider x:Name="DarkSlider" Header="Dark threshold" Description="Screen colors darker than this switch the LEDs off, which prevents flicker in dark scenes."
+                                 Minimum="0" Maximum="25" Step="0.5" SmallChange="0.5" LargeChange="2" ValueFormat="{}{0:0.#}%"
+                                 Value="{Binding S.DarkThreshold}" />
+                <Border Style="{StaticResource Divider}" />
+                <c:SettingSlider x:Name="MinSlider" Header="Minimum brightness" Description="Keeps the LEDs glowing at least this bright, even when the screen is black."
+                                 Minimum="0" Maximum="30" Step="1" ValueFormat="{}{0:0}%" Value="{Binding S.MinBrightness}" />
+            </StackPanel>
+        </Border>
+
+        <TextBlock Text="White balance" Style="{StaticResource SectionHeader}" />
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <TextBlock Style="{StaticResource SettingDescription}" FontSize="13" Margin="0,0,0,10">
+                    Corrects the color of your LED strip and wall so that white really looks white. The phone calibration sets this automatically.
+                </TextBlock>
+                <c:SettingSlider x:Name="RedSlider" Header="Red" Description="Strength of the red LEDs." Minimum="0" Maximum="100" Step="1"
+                                 ValueFormat="{}{0:0}%" Value="{Binding S.WhiteR}" />
+                <c:SettingSlider x:Name="GreenSlider" Header="Green" Description="Strength of the green LEDs." Minimum="0" Maximum="100" Step="1"
+                                 ValueFormat="{}{0:0}%" Value="{Binding S.WhiteG}" />
+                <c:SettingSlider x:Name="BlueSlider" Header="Blue" Description="Strength of the blue LEDs." Minimum="0" Maximum="100" Step="1"
+                                 ValueFormat="{}{0:0}%" Value="{Binding S.WhiteB}" />
+                <Border Style="{StaticResource Divider}" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                        <TextBlock Text="Show white on the LEDs" Style="{StaticResource SettingTitle}" />
+                        <TextBlock Text="Lights every LED in white so you can compare it with white on your screen while you adjust."
+                                   Style="{StaticResource SettingDescription}" />
+                    </StackPanel>
+                    <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowWhite}"
+                              IsEnabled="{Binding CalibrationActive, Converter={StaticResource InverseBool}}"
+                              AutomationProperties.Name="Show white on the LEDs" />
+                </Grid>
+                <Border Style="{StaticResource Divider}" />
+                <WrapPanel Margin="0,4,0,0">
+                    <Button Style="{DynamicResource AccentButtonStyle}" Command="{Binding StartCalibrationCommand}" Margin="0,0,8,4" AutomationProperties.Name="Calibrate with phone"
+                            ToolTip="Measures the LED glow with your phone camera and sets the white balance automatically.">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE722;" FontFamily="{StaticResource IconFont}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <TextBlock Text="Calibrate with phone…" />
+                        </StackPanel>
+                    </Button>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+
+        <WrapPanel Margin="0,16,0,0">
+            <Button x:Name="ResetImported" Content="Reset to AmbiBox values" Click="OnResetImported" Margin="0,0,8,8"
+                    ToolTip="Reads the color settings of your AmbiBox profile again." />
+            <Button Content="Reset to defaults" Click="OnResetDefaults" Margin="0,0,8,8"
+                    ToolTip="Resets every color setting on this page to RambiBox' defaults." />
+        </WrapPanel>
+    </StackPanel>
+</UserControl>

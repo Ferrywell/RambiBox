@@ -1,9 +1,6 @@
 ﻿<Application x:Class="RambiBox.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:RambiBox.App"
-             StartupUri="MainWindow.xaml">
-    <Application.Resources>
-         
-    </Application.Resources>
+             ShutdownMode="OnExplicitShutdown">
+    <!-- Fluent theme (ThemeMode) and the app styles are applied in App.OnStartup. -->
 </Application>

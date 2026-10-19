@@ -1,0 +1,31 @@
+<UserControl x:Class="RambiBox.App.Controls.SettingSlider"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Name="Root" Focusable="False" IsTabStop="False">
+    <Grid Margin="0,4" Background="Transparent" ToolTip="{Binding Description, ElementName=Root}" ToolTipService.InitialShowDelay="900">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" MinWidth="150" />
+            <ColumnDefinition Width="1.6*" MinWidth="180" MaxWidth="380" />
+            <ColumnDefinition Width="Auto" MinWidth="62" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+            <TextBlock x:Name="HeaderText" Style="{StaticResource SettingTitle}" />
+            <TextBlock x:Name="DescriptionText" Style="{StaticResource SettingDescription}" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+            <Slider x:Name="PART_Slider" IsMoveToPointEnabled="True" VerticalAlignment="Center"
+                    ValueChanged="OnSliderValueChanged" />
+            <Grid x:Name="EndLabels" Margin="2,-2,2,0">
+                <TextBlock x:Name="LeftText" FontSize="11" HorizontalAlignment="Left"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                <TextBlock x:Name="RightText" FontSize="11" HorizontalAlignment="Right"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+            </Grid>
+        </StackPanel>
+        <TextBlock Grid.Column="2" x:Name="ValueText" VerticalAlignment="Center" HorizontalAlignment="Right" TextAlignment="Right"
+                   Margin="12,0,4,0" FontSize="14" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+        <Button Grid.Column="3" x:Name="ResetButton" Style="{StaticResource SubtleIconButton}" Content="&#xE7A7;"
+                Click="OnReset" ToolTip="Reset to default" AutomationProperties.Name="Reset to default" />
+    </Grid>
+</UserControl>

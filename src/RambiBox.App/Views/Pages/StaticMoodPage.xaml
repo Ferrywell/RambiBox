@@ -1,0 +1,113 @@
+<UserControl x:Class="RambiBox.App.Views.Pages.StaticMoodPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:RambiBox.App.Controls"
+             IsTabStop="False">
+    <StackPanel>
+        <TextBlock Text="Static color &amp; mood light" Style="{StaticResource PageTitle}" />
+        <TextBlock Text="Light for when you're not watching the screen. Changes show on the LEDs right away."
+                   Style="{StaticResource PageSubtitle}" />
+
+        <!-- static color -->
+        <Border Style="{StaticResource Card}" Padding="20,16">
+            <StackPanel>
+                <Grid Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Static color" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="All LEDs show this color. White balance is applied, so white matches your calibrated white."
+                                   Style="{StaticResource SettingDescription}" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="Use static color" VerticalAlignment="Center" Click="OnUseStatic"
+                            Visibility="{Binding S.IsStaticColor, Converter={StaticResource InverseBoolToVisibility}}" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                                Visibility="{Binding S.IsStaticColor, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="&#xE73E;" Style="{StaticResource IconText}" Foreground="{DynamicResource SystemFillColorSuccessBrush}" Margin="0,0,6,0" />
+                        <TextBlock Text="Active" Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
+                <c:ColorPicker SelectedColor="{Binding S.StaticColor}" />
+            </StackPanel>
+        </Border>
+
+        <!-- mood -->
+        <Border Style="{StaticResource Card}" Padding="20,16" Margin="0,12,0,0">
+            <StackPanel>
+                <Grid Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Mood light" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="Slowly changing colors to set the atmosphere." Style="{StaticResource SettingDescription}" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="Use mood light" VerticalAlignment="Center" Click="OnUseMood"
+                            Visibility="{Binding S.IsMood, Converter={StaticResource InverseBoolToVisibility}}" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                                Visibility="{Binding S.IsMood, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="&#xE73E;" Style="{StaticResource IconText}" Foreground="{DynamicResource SystemFillColorSuccessBrush}" Margin="0,0,6,0" />
+                        <TextBlock Text="Active" Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="8" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="8" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <RadioButton Style="{StaticResource ChoiceCard}" GroupName="Mood" IsChecked="{Binding S.IsColorCycle}" AutomationProperties.Name="Color cycle">
+                        <StackPanel>
+                            <Border Height="10" CornerRadius="5" Margin="0,2,0,10">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                        <GradientStop Color="#FF4F4F" Offset="0" />
+                                        <GradientStop Color="#FFB03A" Offset="0.5" />
+                                        <GradientStop Color="#FFE24F" Offset="1" />
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
+                            <TextBlock Text="Color cycle" Style="{StaticResource SettingTitle}" FontWeight="SemiBold" />
+                            <TextBlock Text="All LEDs slowly fade through the colors together." Style="{StaticResource SettingDescription}" />
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton Grid.Column="2" Style="{StaticResource ChoiceCard}" GroupName="Mood" IsChecked="{Binding S.IsRainbow}" AutomationProperties.Name="Rainbow">
+                        <StackPanel>
+                            <Border Height="10" CornerRadius="5" Margin="0,2,0,10">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                        <GradientStop Color="#FF0000" Offset="0" />
+                                        <GradientStop Color="#FFFF00" Offset="0.2" />
+                                        <GradientStop Color="#00FF00" Offset="0.4" />
+                                        <GradientStop Color="#00FFFF" Offset="0.6" />
+                                        <GradientStop Color="#0000FF" Offset="0.8" />
+                                        <GradientStop Color="#FF00FF" Offset="1" />
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
+                            <TextBlock Text="Rainbow" Style="{StaticResource SettingTitle}" FontWeight="SemiBold" />
+                            <TextBlock Text="A rainbow that slowly turns around your screen." Style="{StaticResource SettingDescription}" />
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton Grid.Column="4" Style="{StaticResource ChoiceCard}" GroupName="Mood" IsChecked="{Binding S.IsBreathe}" AutomationProperties.Name="Breathe">
+                        <StackPanel>
+                            <Border x:Name="BreatheSwatch" Height="10" CornerRadius="5" Margin="0,2,0,10" />
+                            <TextBlock Text="Breathe" Style="{StaticResource SettingTitle}" FontWeight="SemiBold" />
+                            <TextBlock Text="Your static color slowly pulses brighter and dimmer." Style="{StaticResource SettingDescription}" />
+                        </StackPanel>
+                    </RadioButton>
+                </Grid>
+
+                <c:SettingSlider x:Name="SpeedSlider" Header="Speed" Description="How fast the mood light changes. 1× is one color cycle per minute."
+                                 Minimum="0.1" Maximum="5" Step="0.1" SmallChange="0.1" LargeChange="0.5" LeftLabel="Slow" RightLabel="Fast"
+                                 DefaultValue="1" Value="{Binding S.MoodSpeed}" Margin="0,14,0,0" />
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

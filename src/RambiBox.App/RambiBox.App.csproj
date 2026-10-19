@@ -6,8 +6,11 @@
     <RootNamespace>RambiBox.App</RootNamespace>
     <AssemblyName>RambiBox</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\RambiBox.ico</ApplicationIcon>
     <!-- WPF Fluent theme (ThemeMode) is marked experimental in .NET 9/10 -->
     <NoWarn>$(NoWarn);WPF0001</NoWarn>
+    <!-- WPF needs culture data (xml:lang / text formatting); invariant mode makes XAML fail with "Cannot find non-neutral culture" -->
+    <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,6 +19,12 @@
 
   <ItemGroup>
     <PackageReference Include="H.NotifyIcon.Wpf" Version="2.4.1" />
+    <PackageReference Include="QRCoder" Version="1.8.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\RambiBox.ico" />
+    <Resource Include="Assets\Tray\*.ico" />
   </ItemGroup>
 
 </Project>

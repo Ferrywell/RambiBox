@@ -1,0 +1,83 @@
+<UserControl x:Class="RambiBox.App.Controls.ColorPicker"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             IsTabStop="False">
+    <WrapPanel Orientation="Horizontal">
+        <StackPanel Margin="0,0,24,8" Width="280">
+            <!-- saturation / brightness square (thumb canvas outside the clipped border so it is never cut off) -->
+            <Grid>
+            <Border x:Name="SvArea" Height="176" CornerRadius="6" ClipToBounds="True" Focusable="True" Cursor="Cross"
+                    BorderThickness="1" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                    FocusVisualStyle="{DynamicResource DefaultControlFocusVisualStyle}"
+                    AutomationProperties.Name="Saturation and brightness"
+                    ToolTip="Drag to choose saturation (left–right) and brightness (top–bottom). Arrow keys fine-tune."
+                    MouseLeftButtonDown="OnSvDown" MouseMove="OnSvMove" MouseLeftButtonUp="OnPointerUp" KeyDown="OnSvKey">
+                <Grid>
+                    <Rectangle x:Name="HueFill" Fill="Red" />
+                    <Rectangle>
+                        <Rectangle.Fill>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                <GradientStop Color="White" Offset="0" />
+                                <GradientStop Color="#00FFFFFF" Offset="1" />
+                            </LinearGradientBrush>
+                        </Rectangle.Fill>
+                    </Rectangle>
+                    <Rectangle>
+                        <Rectangle.Fill>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#00000000" Offset="0" />
+                                <GradientStop Color="Black" Offset="1" />
+                            </LinearGradientBrush>
+                        </Rectangle.Fill>
+                    </Rectangle>
+                </Grid>
+            </Border>
+            <Canvas x:Name="SvCanvas" IsHitTestVisible="False" Margin="1">
+                <Ellipse x:Name="SvThumb" Width="18" Height="18" Stroke="#99000000" StrokeThickness="1" />
+                <Ellipse x:Name="SvThumbInner" Width="16" Height="16" Stroke="White" StrokeThickness="2" />
+            </Canvas>
+            </Grid>
+            <!-- hue bar -->
+            <Grid Margin="0,14,0,0" Height="20">
+                <Border x:Name="HueArea" Height="12" CornerRadius="6" Focusable="True" Cursor="Hand"
+                        FocusVisualStyle="{DynamicResource DefaultControlFocusVisualStyle}"
+                        AutomationProperties.Name="Hue" ToolTip="Hue"
+                        MouseLeftButtonDown="OnHueDown" MouseMove="OnHueMove" MouseLeftButtonUp="OnPointerUp" KeyDown="OnHueKey">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                            <GradientStop Color="#FF0000" Offset="0" />
+                            <GradientStop Color="#FFFF00" Offset="0.1667" />
+                            <GradientStop Color="#00FF00" Offset="0.3333" />
+                            <GradientStop Color="#00FFFF" Offset="0.5" />
+                            <GradientStop Color="#0000FF" Offset="0.6667" />
+                            <GradientStop Color="#FF00FF" Offset="0.8333" />
+                            <GradientStop Color="#FF0000" Offset="1" />
+                        </LinearGradientBrush>
+                    </Border.Background>
+                </Border>
+                <Canvas x:Name="HueCanvas" IsHitTestVisible="False">
+                    <Ellipse x:Name="HueThumb" Width="20" Height="20" Fill="White" Stroke="#66000000" StrokeThickness="1" />
+                </Canvas>
+            </Grid>
+        </StackPanel>
+
+        <StackPanel Width="250" Margin="0,0,0,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border x:Name="PreviewSwatch" Width="56" Height="56" CornerRadius="8" BorderThickness="1"
+                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" />
+                <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="Hex" Style="{StaticResource SettingDescription}" Margin="0,0,0,4" />
+                    <TextBox x:Name="HexBox" Width="120" HorizontalAlignment="Left" MaxLength="7"
+                             AutomationProperties.Name="Hex color" ToolTip="Type a color like #FF8800 and press Enter."
+                             LostKeyboardFocus="OnHexCommit" KeyDown="OnHexKey" />
+                </StackPanel>
+            </Grid>
+            <TextBlock Text="Presets" Style="{StaticResource SettingDescription}" Margin="0,16,0,8" />
+            <WrapPanel x:Name="Presets" />
+        </StackPanel>
+    </WrapPanel>
+</UserControl>

@@ -1,0 +1,83 @@
+<UserControl x:Class="RambiBox.App.Views.Pages.SettingsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:RambiBox.App.Controls"
+             IsTabStop="False">
+    <StackPanel>
+        <TextBlock Text="Settings" Style="{StaticResource PageTitle}" Margin="0,0,0,16" />
+
+        <TextBlock Text="Startup and power" Style="{StaticResource SectionHeader}" Margin="2,0,0,8" />
+        <c:SettingCard Header="Start with Windows" Glyph="&#xE7E8;"
+                       Description="RambiBox starts quietly in the notification area when you sign in.">
+            <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding S.StartWithWindows}" AutomationProperties.Name="Start with Windows" />
+        </c:SettingCard>
+        <c:SettingCard Header="Turn off the LEDs when the display turns off" Glyph="&#xE7F4;"
+                       Description="The LEDs go dark when Windows switches the screen off, and come back with it. (They always turn off when the PC sleeps or shuts down.)">
+            <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding S.OffWhenDisplayOff}" AutomationProperties.Name="Turn off the LEDs when the display turns off" />
+        </c:SettingCard>
+        <c:SettingCard Header="Turn off the LEDs when the PC is locked" Glyph="&#xE72E;"
+                       Description="The LEDs go dark on the lock screen (Windows key + L) and come back when you sign in.">
+            <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding S.OffWhenLocked}" AutomationProperties.Name="Turn off the LEDs when the PC is locked" />
+        </c:SettingCard>
+
+        <TextBlock Text="Screen capture" Style="{StaticResource SectionHeader}" />
+        <c:SettingCard Header="Ignore black bars (letterbox)" Glyph="&#xE740;"
+                       Description="For films with black bars, the LEDs use the colors of the picture instead of the bars.">
+            <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding S.BlackBarDetection}" AutomationProperties.Name="Ignore black bars" />
+        </c:SettingCard>
+
+        <TextBlock Text="Appearance" Style="{StaticResource SectionHeader}" />
+        <c:SettingCard Header="Theme" Glyph="&#xE790;"
+                       Description="RambiBox follows your Windows light or dark mode and accent color automatically. Change them in Windows Settings › Personalization." />
+
+        <TextBlock Text="AmbiBox" Style="{StaticResource SectionHeader}" />
+        <c:SettingCard x:Name="ImportCard" Header="Import settings from AmbiBox" Glyph="&#xE8B5;"
+                       Description="Replaces all RambiBox settings with your current AmbiBox profile (LEDs, colors, white balance, port).">
+            <Button x:Name="ImportButton" Content="Import…" Click="OnImport" />
+        </c:SettingCard>
+        <c:SettingCard Header="AmbiBox at startup" Glyph="&#xE7E8;" x:Name="AutostartCard"
+                       Description="Whether AmbiBox still starts with Windows. Only one program can use the LED controller.">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="AutostartText" VerticalAlignment="Center" Margin="0,0,12,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <Button Content="Remove from startup" Command="{Binding RemoveAmbiBoxAutostartCommand}"
+                        Visibility="{Binding AmbiBoxInAutostart, Converter={StaticResource BoolToVisibility}}" />
+            </StackPanel>
+        </c:SettingCard>
+
+        <TextBlock Text="Reset" Style="{StaticResource SectionHeader}" />
+        <c:SettingCard Header="Reset all settings" Glyph="&#xE777;"
+                       Description="Goes back to the default settings. Your AmbiBox settings are imported again if AmbiBox is installed.">
+            <Button x:Name="ResetButton" Content="Reset…" Click="OnResetClick" />
+        </c:SettingCard>
+        <c:InfoBar x:Name="ResetConfirm" Severity="Warning" Title="Reset all settings?" Visibility="Collapsed"
+                   Message="Layout, colors, white balance and device settings are replaced. This can't be undone." Margin="0,4,0,4">
+            <WrapPanel>
+                <Button Content="Reset all settings" Style="{DynamicResource AccentButtonStyle}" Click="OnResetConfirmed" Margin="0,0,8,0" />
+                <Button Content="Cancel" Click="OnResetCancelled" />
+            </WrapPanel>
+        </c:InfoBar>
+
+        <TextBlock Text="About" Style="{StaticResource SectionHeader}" />
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Image Source="/Assets/RambiBox.ico" Width="40" Height="40" RenderOptions.BitmapScalingMode="HighQuality" />
+                    <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="RambiBox" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="{Binding VersionText}" Style="{StaticResource SettingDescription}" />
+                    </StackPanel>
+                </StackPanel>
+                <TextBlock Style="{StaticResource SettingDescription}" Margin="0,12,0,0" Text="Ambient lighting for Adalight LED strips – the successor of AmbiBox for Windows 11." />
+                <Border Style="{StaticResource Divider}" Margin="-16,12" />
+                <TextBlock Style="{StaticResource SettingDescription}">
+                    <Run Text="Settings:" /> <Run Text="{Binding SettingsPath, Mode=OneWay}" />
+                    <Hyperlink Command="{Binding OpenSettingsFolderCommand}">Open folder</Hyperlink>
+                </TextBlock>
+                <TextBlock Style="{StaticResource SettingDescription}" Margin="0,4,0,0">
+                    <Run Text="Log:" /> <Run Text="{Binding LogPath, Mode=OneWay}" />
+                    <Hyperlink Command="{Binding OpenLogFolderCommand}">Open folder</Hyperlink>
+                </TextBlock>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

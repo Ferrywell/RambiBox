@@ -1,0 +1,128 @@
+<UserControl x:Class="RambiBox.App.Views.Pages.CalibrationPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:RambiBox.App.Controls"
+             IsTabStop="False">
+    <StackPanel>
+        <TextBlock Text="Color calibration" Style="{StaticResource PageTitle}" />
+        <TextBlock Text="Use your phone's camera to make the white of the LEDs match the white of your screen – no special tools needed."
+                   Style="{StaticResource PageSubtitle}" />
+
+        <Border Style="{StaticResource Card}" Padding="20,18">
+            <StackPanel>
+                <Grid Margin="0,0,0,16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource StepBubble}"><TextBlock Text="1" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                    <StackPanel Grid.Column="1" Margin="14,3,0,0">
+                        <TextBlock Text="Start the calibration" Style="{StaticResource SettingTitle}" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource SettingDescription}">
+                            <Run Text="A QR code and a test pattern fill the screen that RambiBox captures:" />
+                            <Run Text="{Binding MonitorText, Mode=OneWay, StringFormat={}{0}.}" />
+                            <Run Text="Dim the room lights if you can." />
+                        </TextBlock>
+                    </StackPanel>
+                </Grid>
+                <Grid Margin="0,0,0,16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource StepBubble}"><TextBlock Text="2" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                    <StackPanel Grid.Column="1" Margin="14,3,0,0">
+                        <TextBlock Text="Open the page on your phone" Style="{StaticResource SettingTitle}" FontWeight="SemiBold" />
+                        <TextBlock Text="Scan the QR code with your phone's camera and open the link. The phone must be on the same Wi-Fi network as this PC."
+                                   Style="{StaticResource SettingDescription}" />
+                    </StackPanel>
+                </Grid>
+                <Grid Margin="0,0,0,18">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource StepBubble}"><TextBlock Text="3" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                    <StackPanel Grid.Column="1" Margin="14,3,0,0">
+                        <TextBlock Text="Take photos" Style="{StaticResource SettingTitle}" FontWeight="SemiBold" />
+                        <TextBlock Text="Stand back so the whole screen and the LED glow around it are in the picture, and take a photo on the page. RambiBox adjusts the white balance after every photo – repeat until it says calibrated, then tap Done."
+                                   Style="{StaticResource SettingDescription}" />
+                    </StackPanel>
+                </Grid>
+                <WrapPanel>
+                    <Button Style="{DynamicResource AccentButtonStyle}" Command="{Binding StartCalibrationCommand}" Padding="16,7" Margin="0,0,12,4" AutomationProperties.Name="Start calibration">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE722;" FontFamily="{StaticResource IconFont}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <TextBlock Text="Start calibration" />
+                        </StackPanel>
+                    </Button>
+                    <TextBlock Text="Calibration is running on the captured screen." VerticalAlignment="Center"
+                               Style="{StaticResource SettingDescription}"
+                               Visibility="{Binding CalibrationActive, Converter={StaticResource BoolToVisibility}}" />
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+
+        <TextBlock Text="Result" Style="{StaticResource SectionHeader}" />
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <TextBlock Text="White balance" Style="{StaticResource SettingTitle}" />
+                <Grid Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="56" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="52" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="24" />
+                        <RowDefinition Height="24" />
+                        <RowDefinition Height="24" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="Red" Style="{StaticResource SettingDescription}" VerticalAlignment="Center" />
+                    <ProgressBar Grid.Column="1" Maximum="100" Value="{Binding S.WhiteR, Mode=OneWay}" Foreground="#E5484D" Height="6" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Text="{Binding S.WhiteR, StringFormat={}{0:0}%}" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                    <TextBlock Grid.Row="1" Text="Green" Style="{StaticResource SettingDescription}" VerticalAlignment="Center" />
+                    <ProgressBar Grid.Row="1" Grid.Column="1" Maximum="100" Value="{Binding S.WhiteG, Mode=OneWay}" Foreground="#30A46C" Height="6" VerticalAlignment="Center" />
+                    <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding S.WhiteG, StringFormat={}{0:0}%}" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                    <TextBlock Grid.Row="2" Text="Blue" Style="{StaticResource SettingDescription}" VerticalAlignment="Center" />
+                    <ProgressBar Grid.Row="2" Grid.Column="1" Maximum="100" Value="{Binding S.WhiteB, Mode=OneWay}" Foreground="#3E63DD" Height="6" VerticalAlignment="Center" />
+                    <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding S.WhiteB, StringFormat={}{0:0}%}" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                </Grid>
+                <Border Style="{StaticResource Divider}" Margin="-16,12" />
+                <Grid ToolTip="Per-color correction for dim tones, measured by the optional dark-tone step of the phone calibration.">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Dark-tone correction" Style="{StaticResource SettingTitle}" />
+                        <TextBlock Text="Keeps dim scenes from drifting towards green or blue." Style="{StaticResource SettingDescription}" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" Text="{Binding ChannelGammaText}" VerticalAlignment="Center" Margin="16,0,0,0"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </Grid>
+                <Border Style="{StaticResource Divider}" Margin="-16,12" />
+                <WrapPanel>
+                    <Button Content="Restore previous white balance" Command="{Binding RestorePreviousWhiteBalanceCommand}" Margin="0,0,12,4"
+                            ToolTip="Undoes the last calibration (white balance and dark-tone correction)." />
+                    <Button Content="Adjust manually" Command="{Binding NavigateCommand}" CommandParameter="colors" Margin="0,0,12,4" />
+                </WrapPanel>
+                <TextBlock Text="{Binding PreviousWhiteBalanceText}" Style="{StaticResource SettingDescription}" Margin="0,4,0,0" />
+            </StackPanel>
+        </Border>
+
+        <TextBlock Text="Network" Style="{StaticResource SectionHeader}" />
+        <c:SettingCard Header="Allow phone access in Windows Firewall" Glyph="&#xE83D;"
+                       Description="Optional. Your phone talks to RambiBox over your Wi-Fi. Without this, Windows shows a one-time prompt when the calibration starts – choose Private networks there.">
+            <StackPanel HorizontalAlignment="Right">
+                <Button Content="Allow…" Command="{Binding AllowFirewallCommand}" HorizontalAlignment="Right"
+                        Visibility="{Binding FirewallAllowed, Converter={StaticResource InverseBoolToVisibility}}"
+                        ToolTip="Adds a firewall rule for RambiBox (TCP ports 47800–47820, private networks only). Needs administrator permission." />
+                <TextBlock Text="{Binding FirewallStatusText}" HorizontalAlignment="Right" Margin="0,6,0,0" FontSize="12"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+        </c:SettingCard>
+        <TextBlock Text="{Binding FirewallMessage}" Style="{StaticResource SettingDescription}" Margin="4,4,0,0"
+                   Visibility="{Binding FirewallMessage, Converter={StaticResource NullToCollapsed}}" />
+    </StackPanel>
+</UserControl>

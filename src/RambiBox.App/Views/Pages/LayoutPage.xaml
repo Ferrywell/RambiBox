@@ -1,0 +1,152 @@
+<UserControl x:Class="RambiBox.App.Views.Pages.LayoutPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:RambiBox.App.Controls"
+             IsTabStop="False">
+    <StackPanel>
+        <TextBlock Text="LED layout" Style="{StaticResource PageTitle}" />
+        <TextBlock Text="Tell RambiBox where your LEDs are, then use Identify LEDs to check it on the strip."
+                   Style="{StaticResource PageSubtitle}" />
+
+        <c:InfoBar Severity="Warning" Title="Custom zones."
+                   Message="Your LED zones were set up by hand (for example in AmbiBox) and don't match a simple per-side layout. Changing the values below replaces them with a generated layout.">
+            <c:InfoBar.Style>
+                <Style TargetType="c:InfoBar" BasedOn="{StaticResource {x:Type c:InfoBar}}">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding S.CanEditLayout}" Value="False">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </c:InfoBar.Style>
+            <Button Content="Edit layout anyway" Click="OnUnlock" HorizontalAlignment="Left" />
+        </c:InfoBar>
+
+        <!-- drawing -->
+        <Border Style="{StaticResource Card}" Padding="12">
+            <StackPanel>
+                <c:LedPreview x:Name="Preview" Kind="Layout" Height="380"
+                              AutomationProperties.Name="Drawing of the LED zones with LED numbers" />
+                <Border Style="{StaticResource Divider}" Margin="-12,8" />
+                <Grid Margin="6,0,6,2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                        <TextBlock Text="Identify LEDs" Style="{StaticResource SettingTitle}" />
+                        <TextBlock Style="{StaticResource SettingDescription}"
+                                   Text="LED 1 lights red, then a green dot walks along the strip in order. It should match the numbers and the arrow above." />
+                    </StackPanel>
+                    <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}" IsChecked="{Binding IdentifyLeds}"
+                              IsEnabled="{Binding CalibrationActive, Converter={StaticResource InverseBool}}"
+                              AutomationProperties.Name="Identify LEDs" />
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- strip -->
+        <TextBlock Text="LED strip" Style="{StaticResource SectionHeader}" />
+        <Border Style="{StaticResource Card}" IsEnabled="{Binding S.CanEditLayout}">
+            <StackPanel>
+                <TextBlock Text="Number of LEDs on each side" Style="{StaticResource SettingTitle}" />
+                <TextBlock Text="Count the LEDs along each edge of the screen. Use 0 for a side without LEDs."
+                           Style="{StaticResource SettingDescription}" />
+                <UniformGrid Columns="4" Margin="0,10,0,0">
+                    <StackPanel Margin="0,0,12,0">
+                        <TextBlock Text="Bottom" Style="{StaticResource SettingDescription}" Margin="0,0,0,4" />
+                        <c:NumberBox Value="{Binding S.LedsBottom}" Minimum="0" Maximum="300" Label="LEDs at the bottom" />
+                    </StackPanel>
+                    <StackPanel Margin="0,0,12,0">
+                        <TextBlock Text="Right" Style="{StaticResource SettingDescription}" Margin="0,0,0,4" />
+                        <c:NumberBox Value="{Binding S.LedsRight}" Minimum="0" Maximum="300" Label="LEDs on the right" />
+                    </StackPanel>
+                    <StackPanel Margin="0,0,12,0">
+                        <TextBlock Text="Top" Style="{StaticResource SettingDescription}" Margin="0,0,0,4" />
+                        <c:NumberBox Value="{Binding S.LedsTop}" Minimum="0" Maximum="300" Label="LEDs at the top" />
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="Left" Style="{StaticResource SettingDescription}" Margin="0,0,0,4" />
+                        <c:NumberBox Value="{Binding S.LedsLeft}" Minimum="0" Maximum="300" Label="LEDs on the left" />
+                    </StackPanel>
+                </UniformGrid>
+                <TextBlock Text="{Binding S.LedSummary}" Style="{StaticResource SettingDescription}" Margin="0,8,0,0" />
+
+                <Border Style="{StaticResource Divider}" Margin="-16,14" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel ToolTip="The corner of the screen where the strip begins (where the cable enters).">
+                        <TextBlock Text="First LED" Style="{StaticResource SettingTitle}" />
+                        <TextBlock Text="Corner where the strip starts." Style="{StaticResource SettingDescription}" />
+                        <ComboBox Margin="0,8,0,0" HorizontalAlignment="Stretch" ItemsSource="{Binding StartCorners}"
+                                  DisplayMemberPath="Display" SelectedValuePath="Value" SelectedValue="{Binding S.StartCorner}"
+                                  AutomationProperties.Name="First LED corner" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" ToolTip="Which way the strip runs around the screen, looking at the screen from the front.">
+                        <TextBlock Text="Direction" Style="{StaticResource SettingTitle}" />
+                        <TextBlock Text="As seen from the front of the screen." Style="{StaticResource SettingDescription}" />
+                        <ComboBox Margin="0,8,0,0" HorizontalAlignment="Stretch" ItemsSource="{Binding Directions}"
+                                  DisplayMemberPath="Display" SelectedValuePath="Value" SelectedValue="{Binding S.DirectionIndex}"
+                                  AutomationProperties.Name="Direction" />
+                    </StackPanel>
+                </Grid>
+
+                <Border Style="{StaticResource Divider}" Margin="-16,14" />
+                <Grid ToolTip="LEDs at the start of the strip that are not behind the screen (e.g. the cable run). They stay dark.">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                        <TextBlock Text="Skip LEDs at the start" Style="{StaticResource SettingTitle}" />
+                        <TextBlock Text="For LEDs before the first corner that should stay dark." Style="{StaticResource SettingDescription}" />
+                    </StackPanel>
+                    <c:NumberBox Grid.Column="1" Width="150" Value="{Binding S.Offset}" Minimum="0" Maximum="300" Label="LEDs to skip" />
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- capture -->
+        <TextBlock Text="Capture area" Style="{StaticResource SectionHeader}" />
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <StackPanel IsEnabled="{Binding S.CanEditLayout}">
+                    <c:SettingSlider x:Name="DepthH" Header="Depth at top and bottom" Description="How far into the picture each top and bottom LED looks, in % of the screen height."
+                                     Minimum="1" Maximum="30" Step="0.5" SmallChange="0.5" LargeChange="2" ValueFormat="{}{0:0.#}%"
+                                     Value="{Binding S.DepthHorizontal}" />
+                    <c:SettingSlider x:Name="DepthV" Header="Depth at the sides" Description="How far into the picture each left and right LED looks, in % of the screen width."
+                                     Minimum="1" Maximum="30" Step="0.5" SmallChange="0.5" LargeChange="2" ValueFormat="{}{0:0.#}%"
+                                     Value="{Binding S.DepthVertical}" />
+                </StackPanel>
+                <Border Style="{StaticResource Divider}" />
+                <Grid ToolTip="The monitor the LEDs are mounted on.">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                        <TextBlock Text="Monitor" Style="{StaticResource SettingTitle}" />
+                        <TextBlock Text="The screen with the LEDs behind it." Style="{StaticResource SettingDescription}" />
+                    </StackPanel>
+                    <ComboBox Grid.Column="1" MinWidth="260" MaxWidth="380" ItemsSource="{Binding MonitorOptions}"
+                              DisplayMemberPath="Display" SelectedValuePath="Value" SelectedValue="{Binding S.MonitorId}"
+                              AutomationProperties.Name="Monitor" />
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <WrapPanel Margin="0,16,0,0">
+            <Button x:Name="ImportButton" Content="Import layout from AmbiBox" Click="OnImport" Margin="0,0,12,8"
+                    ToolTip="Replaces the layout with the zones of your current AmbiBox profile." />
+            <TextBlock x:Name="ImportNote" VerticalAlignment="Center" Style="{StaticResource SettingDescription}" Margin="0,0,0,8" />
+        </WrapPanel>
+        <TextBlock Style="{StaticResource SettingDescription}" Margin="2,4,0,0"
+                   Visibility="{Binding S.IsCustomLayout, Converter={StaticResource InverseBoolToVisibility}}"
+                   Text="The zones are generated from the values above. AmbiBox' standard layout uses exactly the same zones for the same values." />
+    </StackPanel>
+</UserControl>
