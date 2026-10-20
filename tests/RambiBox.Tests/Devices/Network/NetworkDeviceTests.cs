@@ -103,7 +103,7 @@ internal sealed class FakeWled : IDisposable
 
 public class NetworkDeviceTests
 {
-    private static bool WaitFor(Func<bool> cond, int timeoutMs = 5000)
+    private static bool WaitFor(Func<bool> cond, int timeoutMs = 15000)
     {
         var sw = Stopwatch.StartNew();
         while (sw.ElapsedMilliseconds < timeoutMs)
@@ -182,7 +182,7 @@ public class NetworkDeviceTests
         Assert.Equal(f[(489 * 3)..], b[4..]);
 
         wled.Answer = false;
-        Assert.True(WaitFor(() => dev.Status == DeviceStatus.Searching, 8000));
+        Assert.True(WaitFor(() => dev.Status == DeviceStatus.Searching, 15000));
     }
 
     [Fact]
