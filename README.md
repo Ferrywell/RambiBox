@@ -84,6 +84,7 @@ were made with the built-in `--demo` mode, which shows a synthetic scene instead
 - **A native Windows 11 look.**
   - WPF Fluent design that follows your light/dark mode and accent color, with per-monitor DPI.
   - Lives in the tray: left-click opens the window; right-click gives on/off, mode, brightness and exit.
+  - Optional, signed one-click updates from GitHub — you choose whether it checks at all (see [Updates](#updates)).
 - **Lightweight.**
   - One ~90 MB self-contained exe.
   - The window is fully released when closed, so idling in the tray takes ~22 MB of RAM.
@@ -121,7 +122,36 @@ install.cmd
 3. Delete the exe.
 4. To remove all traces, also delete:
    - `%AppData%\RambiBox` (settings, phone certificate);
-   - `%LocalAppData%\RambiBox` (logs).
+   - `%LocalAppData%\RambiBox` (logs, update downloads).
+
+## Updates
+
+RambiBox can keep itself up to date — but only the way you want it (**Settings › About & updates**):
+
+- **You're asked first.** On the first start a note on Home asks whether RambiBox may check GitHub once a day.
+  Until you answer, it never contacts GitHub on its own. *Check now* always works.
+- **Notify + one click.** When a new version is out you get a note on Home (and one tray notification per version)
+  with **What's new**, **Update now** and **Skip this version**.
+- **Automatic installing is off by default.** Turn on *Install updates automatically* and new versions are installed
+  while you're not using the PC (10 minutes without keyboard or mouse, or the display is off) — never during a
+  calibration or while an integration controls the LEDs.
+- **Channel:** *Stable* (releases) or *Beta* (also pre-releases).
+
+How an update works:
+
+1. The check is one HTTPS request to `api.github.com/repos/Ferrywell/RambiBox/releases` with the header
+   `User-Agent: RambiBox/<version>`. Nothing about you or your PC is sent; unchanged answers are cached (ETag), and
+   GitHub's rate limits are respected.
+2. **Update now** downloads `RambiBox.exe`, `RambiBox.exe.sig` and `RambiBox.exe.sha256` from the release to
+   `%LocalAppData%\RambiBox\updates\<version>\`, and checks the size, the SHA-256 and the **ECDSA P-256 signature**
+   against the public key built into RambiBox. Without a valid signature nothing is installed.
+3. RambiBox turns the LEDs off, renames the running exe to `RambiBox.exe.old`, puts the new one in its place and starts
+   it. The new version has 45 seconds to report a healthy start; otherwise the old exe is put back and started again,
+   with an *"Update failed — you're still on …"* note. `RambiBox.exe.old` is deleted at a later start.
+
+Updating needs the release exe in a folder you can write to (like `%LocalAppData%\Programs\RambiBox`). A copy in a
+read-only folder, a development build or a `--simulate`/`--demo` run only checks and links to the download.
+Versions before 1.2.0 have no updater: install 1.2.0 once by hand.
 
 ## First run
 
@@ -291,6 +321,7 @@ On **LED layout**:
 | Settings | `%AppData%\RambiBox\settings.json` (+ `.bak`) |
 | Log | `%LocalAppData%\RambiBox\logs\rambibox.log` |
 | Phone certificate | `%AppData%\RambiBox\phone-ca` |
+| Update downloads | `%LocalAppData%\RambiBox\updates` |
 </details>
 
 ## Command line
@@ -302,6 +333,8 @@ On **LED layout**:
 | `--simulate` | Use a simulated LED controller (for development; separate settings file). |
 | `--demo` | Simulated controller **and** a synthetic animated scene instead of the real desktop, with fresh default settings. Made for screenshots. |
 | `--page=<name>`, `--theme=<light\|dark>` | Open on a page (`home`, `colors`, `static`, `layout`, `device`, `calibration`, `settings`) and force a theme. |
+| `--demo-update` | With `--demo`: pretend a newer release exists, to show the update UI (nothing is downloaded or installed). |
+| `--updated-from <v>`, `--update-token <guid>`, `--update-failed <v>` | Used by the updater when it restarts RambiBox. |
 
 ## Building from source
 
@@ -324,6 +357,7 @@ src/RambiBox.Core      engine, capture, Adalight device, calibration, settings (
   Engine/              LightEngine frame loop, smoothing, color processing, test patterns
   Calibration/         phone calibration: LAN HTTP(S) server, local CA, color-loop analysis
   Config/              settings model and JSON, AmbiBox importer, LED layout generator
+  Updates/             GitHub release check, signature verification, download, exe swap with rollback
 src/RambiBox.App       WPF tray app (Fluent): views, view models, tray icon, Windows integration
   Dev/                 SimulatedLedDevice (--simulate) and DemoScreenSampler (--demo)
 tests/RambiBox.Tests   ~220 xUnit tests (hardware tests are tagged Category=Hardware)

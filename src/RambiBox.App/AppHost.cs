@@ -8,6 +8,7 @@ using RambiBox.Core.Capture;
 using RambiBox.Core.Config;
 using RambiBox.Core.Devices;
 using RambiBox.Core.Engine;
+using RambiBox.Core.Updates;
 
 namespace RambiBox.App;
 
@@ -36,23 +37,42 @@ public sealed record AutoDetectNotice(AutoSwitchAction Action, DiscoveredDevice?
 /// <summary>Command line options.</summary>
 /// <param name="Demo"><c>--demo</c>: simulated LED device plus a synthetic movie scene instead of the real desktop,
 /// with fresh default settings in a temporary folder (screenshots, demos). Implies <paramref name="Simulate"/>.</param>
-public sealed record AppOptions(bool Tray, bool Simulate, string? Theme, string? Page, bool Exit = false, bool Demo = false)
+/// <param name="UpdatedFrom"><c>--updated-from &lt;version&gt;</c>: started by the updater of that (older) version.</param>
+/// <param name="UpdateToken"><c>--update-token &lt;guid&gt;</c>: names the event to signal once this version runs fine.</param>
+/// <param name="UpdateFailed"><c>--update-failed &lt;version&gt;</c>: restarted after that version failed to start (rolled back).</param>
+/// <param name="DemoUpdate"><c>--demo-update</c> (with <c>--demo</c>): pretend a newer release exists (screenshots of the update UI).</param>
+public sealed record AppOptions(bool Tray, bool Simulate, string? Theme, string? Page, bool Exit = false, bool Demo = false,
+    SemVersion? UpdatedFrom = null, string? UpdateToken = null, SemVersion? UpdateFailed = null, bool DemoUpdate = false)
 {
     public static AppOptions Parse(string[] args)
     {
-        bool tray = false, sim = false, exit = false, demo = false;
-        string? theme = null, page = null;
-        foreach (var a in args)
+        bool tray = false, sim = false, exit = false, demo = false, demoUpdate = false;
+        string? theme = null, page = null, token = null;
+        SemVersion? updatedFrom = null, updateFailed = null;
+
+        // "--name value" or "--name=value"
+        string? Value(ref int i, string arg, string name)
         {
-            var arg = a.Trim().ToLowerInvariant();
+            if (arg.StartsWith(name + "=", StringComparison.Ordinal)) return args[i].Trim()[(name.Length + 1)..];
+            if (arg == name && i + 1 < args.Length) return args[++i].Trim();
+            return null;
+        }
+
+        for (int i = 0; i < args.Length; i++)
+        {
+            var arg = args[i].Trim().ToLowerInvariant();
             if (arg is "--tray" or "/tray") tray = true;
             else if (arg is "--simulate" or "/simulate") sim = true;
             else if (arg is "--exit" or "/exit") exit = true;
             else if (arg is "--demo" or "/demo") demo = sim = true;
+            else if (arg is "--demo-update") demoUpdate = true;
             else if (arg.StartsWith("--theme=")) theme = arg["--theme=".Length..];
             else if (arg.StartsWith("--page=")) page = arg["--page=".Length..];
+            else if (arg.StartsWith("--updated-from")) updatedFrom = SemVersion.TryParse(Value(ref i, arg, "--updated-from"), out var v) ? v : null;
+            else if (arg.StartsWith("--update-failed")) updateFailed = SemVersion.TryParse(Value(ref i, arg, "--update-failed"), out var f) ? f : null;
+            else if (arg.StartsWith("--update-token")) token = Value(ref i, arg, "--update-token") is { } t && UpdateHandshake.IsValidToken(t) ? t : null;
         }
-        return new AppOptions(tray, sim, theme, page, exit, demo);
+        return new AppOptions(tray, sim, theme, page, exit, demo, updatedFrom, token, updateFailed, demoUpdate && demo);
     }
 }
 
@@ -229,6 +249,7 @@ public sealed class AppHost : IDisposable
         Settings.Static = s.Static;
         Settings.General = s.General;
         Settings.Api = s.Api;
+        // Settings.Updates is kept: a reset or AmbiBox import doesn't ask the update question again
         Settings.General.FirstRunDone = true;
         if (Settings.Layout.Zones.Count == 0) Settings.Layout.Zones = LayoutGenerator.Generate(Settings.Layout);
         Commit(sender);
@@ -258,6 +279,17 @@ public sealed class AppHost : IDisposable
     {
         _saveTimer.Change(Timeout.Infinite, Timeout.Infinite);
         SaveNow();
+    }
+
+    /// <summary>
+    /// Saves the live settings right now without the rest of <see cref="Commit"/> (no engine / API side effects), for
+    /// a change made while the app is going down (e.g. after a failed update). UI thread.
+    /// </summary>
+    public void SaveSettingsNow()
+    {
+        SettingsSerializer.Normalize(Settings);
+        Volatile.Write(ref _pendingSave, Settings.Clone());
+        FlushSave();
     }
 
     private void SyncStartup()
@@ -518,7 +550,7 @@ public sealed class AppHost : IDisposable
     }
 
     /// <summary>Stops the engine and turns the LEDs off (Windows is shutting down). Safe to call more than once.</summary>
-    public void ShutdownLeds()
+    public void ShutdownLeds(string reason = "session ending")
     {
         lock (this)
         {
@@ -528,9 +560,19 @@ public sealed class AppHost : IDisposable
         FlushSave();
         try { Api.Stop(); } catch (Exception ex) { Log.Warn($"API server stop failed: {ex.Message}"); }
         try { Engine.Stop(); } catch (Exception ex) { Log.Warn($"Engine stop failed: {ex.Message}"); }
-        Log.Info("LEDs turned off (session ending)");
+        Log.Info($"LEDs turned off ({reason})");
         Log.Flush(500);
     }
+
+    /// <summary>Windows switched the display off (for "install updates when you're not using the PC").</summary>
+    public bool DisplayOff => _displayOff;
+
+    /// <summary>In-app updates (created by <see cref="App"/> after the tray icon).</summary>
+    public UpdateService? Updates { get; internal set; }
+
+    /// <summary>Where update downloads and the release cache live.</summary>
+    public string UpdatesDirectory => Options.Demo ? Path.Combine(DemoDirectory, "updates")
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RambiBox", "updates");
 
     // ------------------------------------------------------------------ device discovery
 

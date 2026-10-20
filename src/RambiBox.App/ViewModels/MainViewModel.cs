@@ -33,6 +33,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _host = host;
         S = new SettingsViewModel(host);
         Setup = new DeviceSetupViewModel(host, S);
+        Updates = new UpdatesViewModel(host);
 
         NavItems =
         [
@@ -112,6 +113,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public SettingsViewModel S { get; }
     /// <summary>Device page: type picker, Find devices, LED count offer.</summary>
     public DeviceSetupViewModel Setup { get; }
+    /// <summary>Settings › About &amp; updates, and the update InfoBars on Home.</summary>
+    public UpdatesViewModel Updates { get; }
     public AppHost Host => _host;
 
     // ------------------------------------------------------------------ background device detection (InfoBar)
@@ -194,6 +197,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (value is null || !SetField(ref _selectedNav, value)) return;
+            Updates.OnHome = value.Key == "home";
             // test patterns belong to the page that started them
             _host.SetOverride(UiOverride.None);
             App.Current.LastPage = value.Key;
@@ -693,5 +697,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Setup.Dispose();
         _host.ApiStatusChanged -= OnApiStatusChanged;
         S.Dispose();
+        Updates.Dispose();
     }
 }

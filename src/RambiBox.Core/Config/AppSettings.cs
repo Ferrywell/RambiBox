@@ -52,6 +52,8 @@ public sealed class AppSettings
     public GeneralSettings General { get; set; } = new();
     /// <summary>Prismatik-compatible API server for integrations (see <see cref="ApiSettings"/>).</summary>
     public ApiSettings Api { get; set; } = new();
+    /// <summary>In-app updates from GitHub releases (see <see cref="UpdateSettings"/>).</summary>
+    public UpdateSettings Updates { get; set; } = new();
 
     public AppSettings Clone() => SettingsSerializer.Clone(this);
 }

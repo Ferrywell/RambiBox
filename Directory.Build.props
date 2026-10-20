@@ -9,7 +9,7 @@
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Company>RambiBox</Company>
     <Product>RambiBox</Product>
     <Authors>Ferry</Authors>

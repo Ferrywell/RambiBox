@@ -589,6 +589,10 @@ install.cmd</code></pre>
             <div class="answer"><p>Games in borderless or windowed fullscreen work fine, and so does most exclusive fullscreen on Windows 10/11. Copy-protected video (some streaming apps and browsers with hardware DRM) can appear black to any screen capture — then the LEDs stay dark. Playing such video in a browser with hardware acceleration turned off usually helps.</p></div>
           </details>
           <details>
+            <summary>How does RambiBox stay up to date? Does it phone home?</summary>
+            <div class="answer"><p>Only if you want it to. On the first start RambiBox asks once whether it may check GitHub for new versions once a day — until you answer, it contacts nothing. The check is a single standard request to <code>api.github.com</code>; nothing about you or your PC is sent. When a new version is out you can read what's new and update with one click, or skip that version. Automatic installing is off unless you turn it on (<b>Settings → About &amp; updates</b>). Every update is verified against RambiBox's digital signature before it is installed, and if the new version doesn't start properly, the previous one is put back automatically. Versions before 1.2.0 need to be updated by hand once.</p></div>
+          </details>
+          <details>
             <summary>Is RambiBox affiliated with AmbiBox?</summary>
             <div class="answer"><p>No. RambiBox is an independent open-source project. It can read AmbiBox settings so switching is painless.</p></div>
           </details>

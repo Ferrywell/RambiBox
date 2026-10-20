@@ -57,7 +57,7 @@ jobs:
           'SHA-256 of RambiBox.exe: ' + $hash >> $env:GITHUB_STEP_SUMMARY
 
       # Update signature: ECDSA P-256 over SHA-256 of the exe (DER signature). The app's updater only installs an
-      # update whose signature verifies against the public key compiled into the app (src/RambiBox.App/Updates).
+      # update whose signature verifies against the public key compiled into the app (src/RambiBox.Core/Updates/UpdateSigningKey.cs).
       # The private key lives only in the RELEASE_SIGNING_KEY secret (and offline with the maintainer).
       - name: Sign for the in-app updater
         shell: pwsh

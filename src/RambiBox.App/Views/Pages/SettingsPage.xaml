@@ -105,14 +105,20 @@
             </WrapPanel>
         </c:InfoBar>
 
-        <TextBlock Text="About" Style="{StaticResource SectionHeader}" />
+        <TextBlock x:Name="AboutHeader" Text="About &amp; updates" Style="{StaticResource SectionHeader}" />
         <Border Style="{StaticResource Card}">
             <StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <Image Source="/Assets/RambiBox.ico" Width="40" Height="40" RenderOptions.BitmapScalingMode="HighQuality" />
                     <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
-                        <TextBlock Text="RambiBox" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                        <TextBlock Text="{Binding VersionText}" Style="{StaticResource SettingDescription}" />
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding Updates.VersionTitle}" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                       AutomationProperties.Name="Version" />
+                            <Border Style="{StaticResource Badge}" Margin="10,1,0,0" ToolTip="Which releases RambiBox offers as updates (change it below)">
+                                <TextBlock Text="{Binding Updates.ChannelBadge}" />
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Text="{Binding Updates.BuildText}" Style="{StaticResource SettingDescription}" />
                     </StackPanel>
                 </StackPanel>
                 <TextBlock Style="{StaticResource SettingDescription}" Margin="0,12,0,0" Text="Ambient lighting for Adalight LED strips – the successor of AmbiBox for Windows 11." />
@@ -155,5 +161,62 @@
                 </TextBlock>
             </StackPanel>
         </Border>
+
+        <!-- updates: status + actions -->
+        <Border x:Name="UpdatesCard" Style="{StaticResource Card}" Margin="0,8,0,4" DataContext="{Binding Updates}">
+            <StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid Width="40" Height="40" VerticalAlignment="Top">
+                        <Border CornerRadius="20" Background="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                        <TextBlock Text="{Binding StatusGlyph}" Style="{StaticResource IconText}" FontSize="18" HorizontalAlignment="Center" />
+                        <Ellipse Style="{StaticResource StatusDot}" Width="10" Height="10" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,1,1" />
+                    </Grid>
+                    <StackPanel Grid.Column="1" Margin="14,0,16,0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding StatusText}" Style="{StaticResource SettingTitle}" FontWeight="SemiBold" TextWrapping="Wrap"
+                                   AutomationProperties.Name="Update status" AutomationProperties.LiveSetting="Polite" />
+                        <TextBlock Text="{Binding StatusDetail}" Style="{StaticResource SettingDescription}" TextWrapping="Wrap"
+                                   Visibility="{Binding HasStatusDetail, Converter={StaticResource BoolToVisibility}}" />
+                    </StackPanel>
+                    <WrapPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right" MaxWidth="420">
+                        <Button Content="Check now" Command="{Binding CheckNowCommand}" Margin="0,2,8,2" AutomationProperties.Name="Check for updates now" />
+                        <Button Content="What's new" Command="{Binding WhatsNewCommand}" Margin="0,2,8,2"
+                                ToolTip="Release notes of the new version (or of this version on GitHub)" />
+                        <Button Style="{DynamicResource AccentButtonStyle}" Content="{Binding UpdateNowLabel}" Command="{Binding UpdateNowCommand}" Margin="0,2,0,2"
+                                Visibility="{Binding ShowUpdateNow, Converter={StaticResource BoolToVisibility}}" AutomationProperties.Name="Update now" />
+                        <Button Content="Cancel" Command="{Binding CancelDownloadCommand}" Margin="0,2,0,2"
+                                Visibility="{Binding ShowCancelDownload, Converter={StaticResource BoolToVisibility}}" AutomationProperties.Name="Cancel the download" />
+                    </WrapPanel>
+                </Grid>
+                <ProgressBar Height="4" Margin="54,12,0,2" Value="{Binding ProgressValue, Mode=OneWay}" IsIndeterminate="{Binding ProgressIndeterminate}"
+                             Visibility="{Binding ShowProgress, Converter={StaticResource BoolToVisibility}}" AutomationProperties.Name="Update progress" />
+                <TextBlock Text="{Binding ErrorText}" Style="{StaticResource ErrorText}" Margin="54,8,0,0" TextWrapping="Wrap"
+                           Visibility="{Binding ErrorText, Converter={StaticResource NullToCollapsed}}" />
+                <TextBlock Text="{Binding InstallNote}" Style="{StaticResource SettingDescription}" Margin="54,8,0,0" TextWrapping="Wrap"
+                           Visibility="{Binding InstallNote, Converter={StaticResource NullToCollapsed}}" />
+            </StackPanel>
+        </Border>
+        <c:SettingCard Header="Check for updates automatically" Glyph="&#xE895;"
+                       Description="Once a day RambiBox asks GitHub whether there's a new version, and tells you. It sends a standard request to github.com – nothing about you.">
+            <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding Updates.CheckAutomatically}" AutomationProperties.Name="Check for updates automatically" />
+        </c:SettingCard>
+        <c:SettingCard Header="Install updates automatically (when you're not using the PC)" Glyph="&#xE777;"
+                       Description="Off: you decide when to update. On: new versions are downloaded in the background and installed after 10 minutes without keyboard or mouse use, or while the display is off – never during a calibration. You get a notification afterwards."
+                       IsEnabled="{Binding Updates.InstallAutomaticallyEnabled}">
+            <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding Updates.InstallAutomatically}" AutomationProperties.Name="Install updates automatically" />
+        </c:SettingCard>
+        <c:SettingCard Header="Update channel" Glyph="&#xE7C1;"
+                       Description="Stable offers releases only. Beta also offers pre-releases: new features sooner, with a higher chance of rough edges.">
+            <ComboBox MinWidth="200" ItemsSource="{Binding Updates.Channels}" DisplayMemberPath="Display" SelectedValuePath="Value"
+                      SelectedValue="{Binding Updates.Channel}" AutomationProperties.Name="Update channel" />
+        </c:SettingCard>
+        <TextBlock Style="{StaticResource SettingDescription}" Margin="2,6,0,0" TextWrapping="Wrap">
+            <Run Text="&#xE72E;" FontFamily="{StaticResource IconFont}" />
+            <Run Text=" Updates are downloaded from GitHub and only installed when their digital signature checks out." />
+        </TextBlock>
     </StackPanel>
 </UserControl>

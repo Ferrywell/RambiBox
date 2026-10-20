@@ -44,6 +44,9 @@ public partial class MainWindow : Window
         Scroller.ScrollToTop();
     }
 
+    /// <summary>Switches to a page (key as in <see cref="MainViewModel.NavItems"/>).</summary>
+    public void ShowPage(string key) => _vm.NavigateCommand.Execute(key);
+
     private void UpdateActive() => _vm.IsViewActive = IsVisible && WindowState != WindowState.Minimized;
 
     private void OnClosed(object? sender, EventArgs e)

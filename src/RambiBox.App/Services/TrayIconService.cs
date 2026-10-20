@@ -112,6 +112,14 @@ public sealed class TrayIconService : IDisposable
         _calibrate.Click += (_, _) => _app.StartCalibration();
         menu.Items.Add(_calibrate);
 
+        var updates = new MenuItem { Header = "Check for updates…" };
+        updates.Click += (_, _) =>
+        {
+            _app.ShowPage("settings");
+            _ = _host.Updates?.CheckNowAsync(manual: true);
+        };
+        menu.Items.Add(updates);
+
         var open = new MenuItem { Header = "Open RambiBox", FontWeight = FontWeights.SemiBold };
         open.Click += (_, _) => _app.ShowMainWindow();
         menu.Items.Add(open);

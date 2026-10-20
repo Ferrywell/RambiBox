@@ -124,6 +124,51 @@
                                CloseCommand="{Binding DismissImportCommand}"
                                Visibility="{Binding ShowImportBar, Converter={StaticResource BoolToVisibility}}" />
 
+                    <!-- updates (Home only) -->
+                    <c:InfoBar Severity="Error" Title="{Binding Updates.FailedTitle}" Message="{Binding Updates.FailedMessage}" IsClosable="True"
+                               CloseCommand="{Binding Updates.DismissFailedCommand}"
+                               Visibility="{Binding Updates.ShowFailedBar, Converter={StaticResource BoolToVisibility}}">
+                        <Button Content="Open log folder" Command="{Binding OpenLogFolderCommand}" HorizontalAlignment="Left" />
+                    </c:InfoBar>
+
+                    <c:InfoBar Severity="Success" Title="{Binding Updates.UpdatedTitle}" Message="{Binding Updates.UpdatedMessage}" IsClosable="True"
+                               CloseCommand="{Binding Updates.DismissUpdatedCommand}"
+                               Visibility="{Binding Updates.ShowUpdatedBar, Converter={StaticResource BoolToVisibility}}">
+                        <Button Content="What's new" Command="{Binding Updates.CurrentReleaseNotesCommand}" HorizontalAlignment="Left"
+                                ToolTip="Opens the release notes on GitHub" />
+                    </c:InfoBar>
+
+                    <c:InfoBar Severity="Informational" Title="Stay up to date?" IconGlyph="&#xE895;"
+                               Message="RambiBox can check GitHub once a day for new versions. It only sends a standard request to github.com – nothing about you. Nothing is installed without your choice, and you can change this any time in Settings."
+                               Visibility="{Binding Updates.ShowConsentBar, Converter={StaticResource BoolToVisibility}}">
+                        <WrapPanel>
+                            <Button Style="{DynamicResource AccentButtonStyle}" Content="Yes, check daily" Command="{Binding Updates.ConsentYesCommand}" Margin="0,0,8,4" />
+                            <Button Content="Don't check" Command="{Binding Updates.ConsentNoCommand}" Margin="0,0,8,4"
+                                    ToolTip="You can still check by hand in Settings › About &amp; updates." />
+                        </WrapPanel>
+                    </c:InfoBar>
+
+                    <c:InfoBar Severity="Informational" Title="{Binding Updates.AvailableTitle}" Message="{Binding Updates.AvailableMessage}"
+                               IconGlyph="&#xE896;" IsClosable="True" CloseCommand="{Binding Updates.DismissAvailableCommand}"
+                               Visibility="{Binding Updates.ShowAvailableBar, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <ProgressBar Height="4" Margin="0,0,0,10" MaxWidth="420" HorizontalAlignment="Stretch"
+                                         Value="{Binding Updates.ProgressValue, Mode=OneWay}" IsIndeterminate="{Binding Updates.ProgressIndeterminate}"
+                                         Visibility="{Binding Updates.ShowProgress, Converter={StaticResource BoolToVisibility}}"
+                                         AutomationProperties.Name="Update progress" />
+                            <WrapPanel>
+                                <Button Style="{DynamicResource AccentButtonStyle}" Content="{Binding Updates.UpdateNowLabel}" Command="{Binding Updates.UpdateNowCommand}"
+                                        Margin="0,0,8,4" Visibility="{Binding Updates.ShowUpdateNow, Converter={StaticResource BoolToVisibility}}" />
+                                <Button Content="What's new" Command="{Binding Updates.WhatsNewCommand}" Margin="0,0,8,4" />
+                                <Button Content="Skip this version" Command="{Binding Updates.SkipCommand}" Margin="0,0,8,4"
+                                        Visibility="{Binding Updates.ShowUpdateNow, Converter={StaticResource BoolToVisibility}}"
+                                        ToolTip="This version won't be offered again; the next one will." />
+                                <Button Content="Cancel" Command="{Binding Updates.CancelDownloadCommand}" Margin="0,0,8,4"
+                                        Visibility="{Binding Updates.ShowCancelDownload, Converter={StaticResource BoolToVisibility}}" />
+                            </WrapPanel>
+                        </StackPanel>
+                    </c:InfoBar>
+
                     <ContentControl x:Name="PageHost" Focusable="False" IsTabStop="False" />
                 </StackPanel>
             </ScrollViewer>
