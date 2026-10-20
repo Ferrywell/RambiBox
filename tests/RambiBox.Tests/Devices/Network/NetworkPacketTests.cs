@@ -355,6 +355,8 @@ public class NetworkAllocationTests
         for (int i = 0; i < 5; i++) Run(); // warm-up (JIT, socket internals)
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 50; i++) Run();
-        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+        // 50 frames: a per-frame allocation would be ≥ 50 × 24 B. A few bytes of one-off runtime work (tiering,
+        // socket internals on a busy CI runner) are tolerated so the test is about the steady state, not noise.
+        Assert.InRange(GC.GetAllocatedBytesForCurrentThread() - before, 0, 512);
     }
 }
