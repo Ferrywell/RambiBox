@@ -269,12 +269,14 @@ public class SwitchingScreenSamplerTests
                     _ = rig.Sampler.BlackBars;
                     _ = rig.Sampler.CurrentMonitor;
                     _ = rig.Sampler.EffectiveMethod;
-                    reads++;
+                    Interlocked.Increment(ref reads);
                 }
             }
             catch (Exception ex) { error = ex; }
         });
         reader.Start();
+        // Only start switching once the reader really runs: on a busy machine it could otherwise miss all of it.
+        Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref reads) > 0, TimeSpan.FromSeconds(15)));
         var dest = new float[6];
         for (int i = 0; i < 300; i++)
         {
@@ -284,7 +286,6 @@ public class SwitchingScreenSamplerTests
         stop.Cancel();
         reader.Join();
         Assert.Null(error);
-        Assert.True(reads > 0);
         Assert.Equal(301, rig.Created.Count);
         Assert.Equal(300, rig.Created.Count(b => b.Disposed));
     }

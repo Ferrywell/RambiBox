@@ -353,10 +353,15 @@ public class NetworkAllocationTests
         }
 
         for (int i = 0; i < 5; i++) Run(); // warm-up (JIT, socket internals)
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 50; i++) Run();
-        // 50 frames: a per-frame allocation would be ≥ 50 × 24 B. A few bytes of one-off runtime work (tiering,
-        // socket internals on a busy CI runner) are tolerated so the test is about the steady state, not noise.
-        Assert.InRange(GC.GetAllocatedBytesForCurrentThread() - before, 0, 512);
+        // Steady state = the quietest batch. A per-frame allocation (at least 50 x 24 B per batch) shows up in every
+        // batch, while one-off runtime work during startup of a busy test run (tiering, socket internals) only hits one.
+        long quietest = long.MaxValue;
+        for (int batch = 0; batch < 5 && quietest > 0; batch++)
+        {
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < 50; i++) Run();
+            quietest = Math.Min(quietest, GC.GetAllocatedBytesForCurrentThread() - before);
+        }
+        Assert.Equal(0, quietest);
     }
 }
