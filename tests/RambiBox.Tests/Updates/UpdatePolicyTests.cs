@@ -168,3 +168,28 @@ public class UpdateTextTests
         Assert.DoesNotContain(last.Inlines, i => i.Kind == MdInlineKind.Link && i.Url!.StartsWith("javascript"));
     }
 }
+
+public class UpdateConsentNotificationTests
+{
+    [Fact]
+    public void Tray_users_are_asked_once_and_never_after_answering()
+    {
+        var s = new RambiBox.Core.Config.UpdateSettings();
+        Assert.True(UpdatePolicy.ShouldNotifyConsent(s, windowVisible: false));
+        Assert.False(UpdatePolicy.ShouldNotifyConsent(s, windowVisible: true)); // the question is on screen
+
+        s.ConsentNotified = true;
+        Assert.False(UpdatePolicy.ShouldNotifyConsent(s, windowVisible: false)); // only once
+
+        var answered = new RambiBox.Core.Config.UpdateSettings { ConsentAsked = true };
+        Assert.False(UpdatePolicy.ShouldNotifyConsent(answered, windowVisible: false));
+    }
+
+    [Fact]
+    public void Being_notified_does_not_count_as_consent()
+    {
+        var s = new RambiBox.Core.Config.UpdateSettings { ConsentNotified = true };
+        Assert.False(s.AutoCheckEnabled);
+        Assert.Null(UpdatePolicy.NextAutomaticCheck(s, DateTimeOffset.Now, null));
+    }
+}

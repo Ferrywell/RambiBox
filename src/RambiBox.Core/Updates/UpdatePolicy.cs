@@ -36,6 +36,13 @@ public static class UpdatePolicy
         return lastAutomaticCheck is { } last ? last + CheckInterval : startedAt + FirstCheckDelay;
     }
 
+    /// <summary>
+    /// The question about updates lives on Home, which someone who only uses the tray never sees. Ask once with a tray
+    /// notification, and not when the window is open (the question is on screen then).
+    /// </summary>
+    public static bool ShouldNotifyConsent(UpdateSettings s, bool windowVisible) =>
+        !s.ConsentAsked && !s.ConsentNotified && !windowVisible;
+
     /// <summary>An automatic check may run now (never on a metered connection).</summary>
     public static bool MayCheckAutomatically(UpdateSettings s, bool metered) => s.AutoCheckEnabled && !metered;
 

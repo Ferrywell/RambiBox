@@ -218,6 +218,7 @@ public sealed class DxgiScreenSampler : IScreenSampler
 
         // ---- GPU downscale, read back the small mip level, zone averages
         int mapHr = _reducer.Reduce(destRgb);
+        if (mapHr == GpuFrameReducer.GpuBusy) return SampleResult.NoChange; // GPU saturated: keep the last colors
         if (mapHr < 0)
         {
             HandleHresult(mapHr, "Map");

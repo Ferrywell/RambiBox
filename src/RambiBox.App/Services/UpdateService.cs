@@ -154,7 +154,24 @@ public sealed class UpdateService : IDisposable
             _host.Commit(this, pushToEngine: false);
             _ = CheckNowAsync(manual: true);
         }
+        else ScheduleConsentNotification();
         Reschedule();
+    }
+
+    /// <summary>Asks once via the tray, a little after start so it doesn't compete with everything else at login.</summary>
+    private void ScheduleConsentNotification()
+    {
+        if (S.ConsentAsked || S.ConsentNotified || _host.Options.Simulate) return;
+        var timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = UpdatePolicy.FirstCheckDelay };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            if (_disposed || !UpdatePolicy.ShouldNotifyConsent(S, _shell.WindowVisible)) return;
+            S.ConsentNotified = true;
+            _host.Commit(this, pushToEngine: false);
+            _shell.Notify("Stay up to date?", "Click to choose whether RambiBox may check for new versions. Nothing is checked until you decide.", "home");
+        };
+        timer.Start();
     }
 
     private void Reschedule()

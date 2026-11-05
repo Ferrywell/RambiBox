@@ -66,6 +66,7 @@ public sealed class UpdatesViewModel : ObservableObject, IDisposable
             var parts = new List<string>();
             if (AppInfo.BuildDate is { } d) parts.Add("Built " + d.ToString("d MMMM yyyy", CultureInfo.InvariantCulture));
             parts.Add(AppInfo.SemVersion.IsPrerelease ? "pre-release" : "release");
+            parts.Add(System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription);
             if (_host.Options.Simulate && !_host.Options.Demo) parts.Add("simulated LED device");
             return string.Join(" · ", parts);
         }

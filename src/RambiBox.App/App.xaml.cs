@@ -124,7 +124,7 @@ public partial class App : Application, IUpdateShell
         AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
 
-        Log.Info($"RambiBox {AppInfo.Version} starting" +
+        Log.Info($"RambiBox {AppInfo.Version} ({System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription}, Windows build {Environment.OSVersion.Version.Build}) starting" +
                  $"{(options.Demo ? " (demo: synthetic picture, simulated LED device)" : options.Simulate ? " (simulated LED device)" : "")}{(options.Tray ? " in the tray" : "")}" +
                  $"{(options.UpdatedFrom is { } from ? $" (updated from {from})" : "")}{(options.UpdateFailed is { } failed ? $" (the update to {failed} failed and was undone)" : "")}");
 

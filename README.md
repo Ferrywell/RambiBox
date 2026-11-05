@@ -22,7 +22,7 @@
 **RambiBox turns an Adalight LED strip behind your monitor or TV into ambient light that follows the picture.** It
 is a fast, modern replacement for the old AmbiBox on Windows 10 and 11:
 
-- **Light on the system.** It uses about 1 % of one CPU core and ~22 MB of RAM when idle.
+- **Light on the system.** It uses about 1 % of one CPU core and ~30 MB of RAM when idle.
 - **Fast.** It sends as many frames as the serial link can carry.
 - **Easy to switch to.** It imports your AmbiBox settings and finds the LED controller by itself.
 - **Accurate.** Your phone measures the colors, and your eyes have the final say.
@@ -87,7 +87,7 @@ were made with the built-in `--demo` mode, which shows a synthetic scene instead
   - Optional, signed one-click updates from GitHub — you choose whether it checks at all (see [Updates](#updates)).
 - **Lightweight.**
   - One ~90 MB self-contained exe.
-  - The window is fully released when closed, so idling in the tray takes ~22 MB of RAM.
+  - The window is fully released when closed, so idling in the tray takes ~30 MB of RAM.
 
 ## Download & install
 
@@ -128,7 +128,8 @@ install.cmd
 
 RambiBox can keep itself up to date — but only the way you want it (**Settings › About & updates**):
 
-- **You're asked first.** On the first start a note on Home asks whether RambiBox may check GitHub once a day.
+- **You're asked first.** A note on Home, and once a tray notification if you never open the window, asks whether
+  RambiBox may check GitHub once a day.
   Until you answer, it never contacts GitHub on its own. *Check now* always works.
 - **Notify + one click.** When a new version is out you get a note on Home (and one tray notification per version)
   with **What's new**, **Update now** and **Skip this version**.
@@ -360,7 +361,7 @@ src/RambiBox.Core      engine, capture, Adalight device, calibration, settings (
   Updates/             GitHub release check, signature verification, download, exe swap with rollback
 src/RambiBox.App       WPF tray app (Fluent): views, view models, tray icon, Windows integration
   Dev/                 SimulatedLedDevice (--simulate) and DemoScreenSampler (--demo)
-tests/RambiBox.Tests   ~220 xUnit tests (hardware tests are tagged Category=Hardware)
+tests/RambiBox.Tests   ~670 xUnit tests (hardware tests are tagged Category=Hardware)
 docs/                  website (GitHub Pages)
 tools/                 icon generator
 ```

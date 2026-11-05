@@ -122,6 +122,7 @@ public sealed class WgcScreenSampler : IScreenSampler, ICaptureBackendHealth
     internal bool CursorCaptureEnabled { get; set; }
     internal double LastWorkMs { get; private set; }
     internal double LastMapWaitMs => _reducer.LastMapWaitMs;
+    internal GpuFrameReducer ReducerForTests => _reducer;
     internal long FramesCaptured { get; private set; }
     internal long FramesDropped { get; private set; }
     internal long FramesArrived => Interlocked.Read(ref _framesArrived);
@@ -306,6 +307,7 @@ public sealed class WgcScreenSampler : IScreenSampler, ICaptureBackendHealth
         }
 
         int mapHr = _reducer.Reduce(destRgb);
+        if (mapHr == GpuFrameReducer.GpuBusy) return SampleResult.NoChange; // GPU saturated: keep the last colors
         if (mapHr < 0)
         {
             HandleError(mapHr, "Map");

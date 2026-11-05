@@ -31,6 +31,8 @@ public sealed class UpdateSettings
     public DateTimeOffset? LastCheck { get; set; }
     /// <summary>True once the user answered "Stay up to date?" (or changed the automatic check setting).</summary>
     public bool ConsentAsked { get; set; } = false;
+    /// <summary>The one tray notification asking the question was shown (for people who never open the window).</summary>
+    public bool ConsentNotified { get; set; } = false;
     /// <summary>The version the tray notification was shown for (one notification per version).</summary>
     public string? NotifiedVersion { get; set; }
     /// <summary>A version that failed to start after installing: never installed automatically again (manually it can be).</summary>

@@ -121,6 +121,39 @@ public class WgcScreenSamplerHardwareTests(ITestOutputHelper output)
         }
     }
 
+    /// <summary>
+    /// A fence timeout of 0 makes every wait time out, so this drives the "GPU is behind" path on the real driver
+    /// without needing a real stall: frames must keep arriving (later, not never), and no call may block.
+    /// </summary>
+    [Fact]
+    public void Saturated_gpu_path_delivers_late_frames_and_never_blocks()
+    {
+        using var s = new WgcScreenSampler();
+        s.ReducerForTests.FenceTimeoutMs = 0;
+        var zones = new[] { new LedZone(0, 0, 1, 1) };
+        s.Configure("", zones, blackBarDetection: false);
+        var rgb = new float[3];
+        int fresh = 0, unavailable = 0;
+        double maxMs = 0;
+        var sw = Stopwatch.StartNew();
+        while (sw.Elapsed.TotalSeconds < 4)
+        {
+            long t = Stopwatch.GetTimestamp();
+            var r = s.Sample(rgb, 0);
+            if (sw.Elapsed.TotalSeconds > 1) maxMs = Math.Max(maxMs, Stopwatch.GetElapsedTime(t).TotalMilliseconds); // after startup
+            if (r == SampleResult.NewFrame) fresh++;
+            if (r == SampleResult.Unavailable) unavailable++;
+            Thread.Sleep(10);
+        }
+        long busy = s.ReducerForTests.GpuBusyFrames;
+        output.WriteLine($"new frames {fresh}, GPU-busy skips {busy}, unavailable {unavailable}, longest call {maxMs:F1} ms");
+        Assert.True(busy > 0, "the path under test never ran");
+        Assert.True(fresh >= 10, $"only {fresh} frames came through");
+        Assert.Equal(0, unavailable);
+        Assert.InRange(maxMs, 0, 150);
+        Assert.All(rgb, v => Assert.InRange(v, 0f, 1f));
+    }
+
     [Fact]
     public void Cursor_is_not_captured()
     {

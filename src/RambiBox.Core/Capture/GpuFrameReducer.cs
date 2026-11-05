@@ -25,8 +25,15 @@ internal sealed class GpuFrameReducer : IDisposable
     private const double PreviewIntervalSeconds = 0.1;
     /// <summary>A single GPU step (copy, fence wait, Map) slower than this is logged (rate-limited).</summary>
     internal const double SlowGpuStepMs = 200;
-    /// <summary>Upper bound for the fence wait; Map() blocks for the rest if the GPU is even slower.</summary>
-    private const int FenceTimeoutMs = 250;
+    /// <summary>Upper bound for the fence wait. If the GPU is even slower the readback stays pending, see <see cref="GpuBusy"/>.</summary>
+    internal int FenceTimeoutMs { get; set; } = 250;
+    /// <summary>
+    /// <see cref="Reduce"/> result: the GPU didn't finish in time (a game or video is saturating it), nothing was written
+    /// and the previous colors stay valid. The readback stays pending: no new GPU work is queued, and a later call uses
+    /// that frame as soon as the GPU is done, so a saturated GPU gives slower updates rather than none. Waiting longer
+    /// would stall the engine thread, and a blocking Map busy-waits inside the driver.
+    /// </summary>
+    public const int GpuBusy = 1;
 
     internal const Format FormatBgra = Format.B8G8R8A8_UNorm;
     internal const Format FormatBgraSrgb = Format.B8G8R8A8_UNorm_SRgb;
@@ -78,6 +85,10 @@ internal sealed class GpuFrameReducer : IDisposable
 
     // ---- Diagnostics
     private readonly RateLimitedLog _slowGpuLog;
+    /// <summary>Frames skipped because the GPU was saturated (diagnostics, engine thread only).</summary>
+    internal long GpuBusyFrames { get; private set; }
+    /// <summary>The staging copy of an earlier frame is still on its way (fence wait timed out).</summary>
+    private bool _readbackPending;
 
     public GpuFrameReducer(string logPrefix)
     {
@@ -204,6 +215,7 @@ internal sealed class GpuFrameReducer : IDisposable
         _fence = null;
         _context4 = null;
         _fenceValue = 0;
+        _readbackPending = false;
         try { _context?.ClearState(); } catch { }
         try { _context?.Dispose(); } catch { }
         try { _device?.Dispose(); } catch { }
@@ -287,6 +299,7 @@ internal sealed class GpuFrameReducer : IDisposable
     /// </summary>
     public void CopyIn(IntPtr srcTexture)
     {
+        if (_readbackPending) return; // the GPU is behind: don't add work, the pending frame is used first
         long t0 = Stopwatch.GetTimestamp();
         if (_mipLevel > 0) NativeCom.CopySubresourceRegion(_contextPtr, _mipTexPtr, 0, srcTexture, 0);
         else NativeCom.CopySubresourceRegion(_contextPtr, _stagingPtr, 0, srcTexture, 0);
@@ -296,37 +309,59 @@ internal sealed class GpuFrameReducer : IDisposable
 
     /// <summary>
     /// GPU downscale + readback + CPU analysis; writes the zone colors into <paramref name="destRgb"/>.
-    /// Returns the HRESULT of Map (negative = failure, nothing written; the caller runs its recovery path).
+    /// Returns 0, <see cref="GpuBusy"/> (nothing written, try the next frame) or the HRESULT of Map (negative = failure,
+    /// nothing written; the caller runs its recovery path).
     /// </summary>
     public int Reduce(Span<float> destRgb)
     {
         var ctx = _context!;
-        if (_mipLevel > 0)
-        {
-            ctx.GenerateMips(_srv!);
-            NativeCom.CopySubresourceRegion(_contextPtr, _stagingPtr, 0, _mipTexPtr, (uint)_mipLevel);
-        }
         long mapStart = Stopwatch.GetTimestamp();
-        if (_fence is not null && _context4 is not null)
+        if (_readbackPending)
         {
-            _fenceValue++;
-            _context4.Signal(_fence, _fenceValue);
-            try
+            // An earlier frame is still on its way; use it once it's done. (A lost device reports a completed value of
+            // UINT64_MAX, so it ends up in Map below and takes the normal recovery path.)
+            if (_fence!.CompletedValue < _fenceValue)
             {
-                _fence.SetEventOnCompletion(_fenceValue, _gpuDone.SafeWaitHandle.DangerousGetHandle());
-                ctx.Flush();
-                _gpuDone.WaitOne(FenceTimeoutMs); // the Map below then returns without blocking
+                GpuBusyFrames++;
+                return GpuBusy;
             }
-            catch (SharpGenException)
+            _readbackPending = false;
+        }
+        else
+        {
+            if (_mipLevel > 0)
             {
-                // Device lost etc.: fall through to Map, whose HRESULT drives the normal recovery path.
+                ctx.GenerateMips(_srv!);
+                NativeCom.CopySubresourceRegion(_contextPtr, _stagingPtr, 0, _mipTexPtr, (uint)_mipLevel);
+            }
+            if (_fence is not null && _context4 is not null)
+            {
+                _fenceValue++;
+                _context4.Signal(_fence, _fenceValue);
+                try
+                {
+                    _gpuDone.Reset(); // an earlier timed-out wait may have left it set
+                    _fence.SetEventOnCompletion(_fenceValue, _gpuDone.SafeWaitHandle.DangerousGetHandle());
+                    ctx.Flush();
+                    _gpuDone.WaitOne(FenceTimeoutMs); // when done, the Map below returns at once
+                    if (_fence.CompletedValue < _fenceValue)
+                    {
+                        _readbackPending = true;
+                        GpuBusyFrames++;
+                        LastMapWaitMs = Stopwatch.GetElapsedTime(mapStart).TotalMilliseconds;
+                        if (LastMapWaitMs > SlowGpuStepMs) ReportSlow("GPU fence wait timed out", LastMapWaitMs);
+                        return GpuBusy;
+                    }
+                }
+                catch (SharpGenException)
+                {
+                    // Device lost etc.: fall through to Map, whose HRESULT drives the normal recovery path.
+                }
             }
         }
-        double fenceMs = Stopwatch.GetElapsedTime(mapStart).TotalMilliseconds;
         var mr = ctx.Map(_staging!, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.None, out var mapped);
         LastMapWaitMs = Stopwatch.GetElapsedTime(mapStart).TotalMilliseconds;
-        if (LastMapWaitMs > SlowGpuStepMs)
-            ReportSlow(fenceMs >= FenceTimeoutMs ? "GPU fence wait timed out + Map" : "GPU fence wait + Map", LastMapWaitMs);
+        if (LastMapWaitMs > SlowGpuStepMs) ReportSlow("GPU fence wait + Map", LastMapWaitMs);
         if (mr.Failure) return mr.Code;
         try
         {
@@ -414,6 +449,7 @@ internal sealed class GpuFrameReducer : IDisposable
         try { _mipTex?.Dispose(); } catch { }
         try { _staging?.Dispose(); } catch { }
         _srv = null; _mipTex = null; _staging = null;
+        _readbackPending = false;
         _srcW = _srcH = 0;
         _srcFormat = -1;
     }

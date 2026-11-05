@@ -1,0 +1,15 @@
+# Keeps dependencies current. The app embeds the .NET runtime, so a new runtime only reaches users through a new
+# release: the release workflow always builds with the latest .NET 10 patch (setup-dotnet 10.0.x).
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: monthly
+    groups:
+      all-nuget:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
